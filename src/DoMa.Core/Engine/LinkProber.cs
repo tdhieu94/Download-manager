@@ -65,9 +65,13 @@ public class LinkProber(HttpClient http)
     private static string? ResolveFileName(DownloadRequest req, HttpResponseMessage resp, string finalUrl)
     {
         var disposition = resp.Content.Headers.ContentDisposition;
-        var name = disposition?.FileNameStar ?? disposition?.FileName?.Trim('"');
+        // filename* (RFC 5987) đã có mã hoá rõ ràng; tên do trình duyệt đề xuất đã được trình duyệt giải mã đúng;
+        // filename thường hay bị máy chủ gửi UTF-8 thô nên để sau và sửa mã hoá trong Sanitize.
+        var name = disposition?.FileNameStar;
         if (string.IsNullOrWhiteSpace(name))
             name = req.SuggestedFileName;
+        if (string.IsNullOrWhiteSpace(name))
+            name = disposition?.FileName?.Trim('"');
         if (string.IsNullOrWhiteSpace(name) && Uri.TryCreate(finalUrl, UriKind.Absolute, out var uri))
             name = Uri.UnescapeDataString(Path.GetFileName(uri.AbsolutePath));
         return string.IsNullOrWhiteSpace(name) ? null : FileNameResolver.Sanitize(name);
