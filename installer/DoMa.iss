@@ -33,7 +33,7 @@ Name: "autostart"; Description: "Chạy DoMa khi mở máy"; Flags: unchecked
 
 [Files]
 Source: "..\artifacts\app\DoMa.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\extension\*"; DestDir: "{app}\extension"; Excludes: "node_modules,test,package.json"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\extension\*"; DestDir: "{app}\extension"; Excludes: "node_modules,test,package.json,firefox.js,build-firefox.mjs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "README-cai-tien-ich.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -42,6 +42,7 @@ Name: "{group}\Download Manager (DoMa)"; Filename: "{app}\DoMa.exe"
 [Registry]
 Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.doma.host"; ValueType: string; ValueName: ""; ValueData: "{app}\com.doma.host.json"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts\com.doma.host"; ValueType: string; ValueName: ""; ValueData: "{app}\com.doma.host.json"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Mozilla\NativeMessagingHosts\com.doma.host"; ValueType: string; ValueName: ""; ValueData: "{app}\com.doma.host.firefox.json"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DoMa"; ValueData: """{app}\DoMa.exe"" --nen"; Flags: uninsdeletevalue; Tasks: autostart
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "DoMa"; Flags: uninsdeletevalue dontcreatekey
 
@@ -52,6 +53,7 @@ Filename: "{app}\README-cai-tien-ich.txt"; Description: "Xem hướng dẫn cài
 
 [UninstallDelete]
 Type: files; Name: "{app}\com.doma.host.json"
+Type: files; Name: "{app}\com.doma.host.firefox.json"
 
 [Code]
 function IsUpdate(): Boolean;
@@ -122,5 +124,10 @@ begin
       JsonEscape(ExpandConstant('{app}\DoMa.exe')) +
       '","type":"stdio","allowed_origins":["chrome-extension://{#ExtensionId}/"]}';
     SaveStringToFile(ExpandConstant('{app}\com.doma.host.json'), Json, False);
+    { Firefox dùng allowed_extensions (mã tiện ích) thay cho allowed_origins. }
+    Json := '{"name":"com.doma.host","description":"Download Manager (DoMa)","path":"' +
+      JsonEscape(ExpandConstant('{app}\DoMa.exe')) +
+      '","type":"stdio","allowed_extensions":["doma-download-manager@extension"]}';
+    SaveStringToFile(ExpandConstant('{app}\com.doma.host.firefox.json'), Json, False);
   end;
 end;

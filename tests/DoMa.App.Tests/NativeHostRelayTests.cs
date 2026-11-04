@@ -109,6 +109,8 @@ public sealed class NativeHostRelayTests : IAsyncDisposable
     [Theory]
     [InlineData(new[] { "chrome-extension://abcdefghijklmnop/" }, true)]
     [InlineData(new[] { "chrome-extension://abcdefghijklmnop/", "--parent-window=0" }, true)]
+    [InlineData(new[] { @"C:\Apps\DoMa\com.doma.host.firefox.json", "doma-download-manager@extension" }, true)]
+    [InlineData(new[] { @"C:\x.json", "other@extension" }, false)]
     [InlineData(new[] { "--nen" }, false)]
     [InlineData(new string[0], false)]
     public void host_mode_detected_from_caller_origin(string[] args, bool expected) =>

@@ -56,6 +56,31 @@ jobs:
         shell: pwsh
         run: ./build.ps1 -Version ${{ steps.ver.outputs.version }}
 
+      - name: Đóng gói tiện ích Firefox
+        shell: pwsh
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          node extension/build-firefox.mjs artifacts/firefox $v
+          npx --yes web-ext@8 lint --source-dir artifacts/firefox --self-hosted --warnings-as-errors=false
+          if ($LASTEXITCODE -ne 0) { throw "web-ext lint lỗi" }
+          if ($env:AMO_JWT_ISSUER -and $env:AMO_JWT_SECRET) {
+            # Có khoá AMO: ký tiện ích (kênh unlisted) để cài được trên Firefox bản thường và tự cập nhật.
+            npx --yes web-ext@8 sign --channel unlisted --api-key $env:AMO_JWT_ISSUER --api-secret $env:AMO_JWT_SECRET --source-dir artifacts/firefox --artifacts-dir artifacts/firefox-signed
+            if ($LASTEXITCODE -ne 0) { throw "Ký tiện ích Firefox thất bại" }
+            $xpi = Get-ChildItem artifacts/firefox-signed -Filter *.xpi | Select-Object -First 1
+            Copy-Item $xpi.FullName "artifacts/DoMa-Firefox-$v.xpi"
+            $hash = (Get-FileHash "artifacts/DoMa-Firefox-$v.xpi" -Algorithm SHA256).Hash.ToLowerInvariant()
+            $url = "https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.tag }}/DoMa-Firefox-$v.xpi"
+            node -e "import('./extension/firefox.js').then(m => process.stdout.write(JSON.stringify(m.updatesJson(process.argv[1], process.argv[2], process.argv[3]), null, 2)))" $v $url $hash | Out-File artifacts/firefox-updates.json -Encoding utf8NoBOM
+          } else {
+            # Chưa có khoá AMO: đóng gói bản chưa ký (chỉ cài được trên Firefox Developer Edition / ESR).
+            Compress-Archive -Path artifacts/firefox/* -DestinationPath "artifacts/DoMa-Firefox-$v-unsigned.zip" -Force
+            Move-Item "artifacts/DoMa-Firefox-$v-unsigned.zip" "artifacts/DoMa-Firefox-$v-unsigned.xpi" -Force
+          }
+
       - name: Tạo file SHA-256
         shell: pwsh
         run: |
@@ -69,4 +94,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          gh release create "${{ steps.ver.outputs.tag }}" "artifacts/DoMa-Setup-$v.exe" "artifacts/DoMa-Setup-$v.exe.sha256" --target "${{ github.sha }}" --title "DoMa $v" --generate-notes
+          $files = @("artifacts/DoMa-Setup-$v.exe", "artifacts/DoMa-Setup-$v.exe.sha256")
+          $files += Get-ChildItem artifacts -Filter "DoMa-Firefox-*.xpi" | ForEach-Object { $_.FullName }
+          if (Test-Path artifacts/firefox-updates.json) { $files += "artifacts/firefox-updates.json" }
+          gh release create "${{ steps.ver.outputs.tag }}" @files --target "${{ github.sha }}" --title "DoMa $v" --generate-notes

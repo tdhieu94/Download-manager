@@ -13,8 +13,16 @@ public sealed class NativeHostRelay(Stream stdin, Stream stdout, Func<Cancellati
 
     private static string Normalize(Version? v) => v is null ? "0.0.0" : $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}";
 
+    /// <summary>Mã tiện ích DoMa trên Firefox (khớp với browser_specific_settings.gecko.id).</summary>
+    public const string FirefoxExtensionId = "doma-download-manager@extension";
+
+    /// <summary>
+    /// Chrome/Edge gọi host với tham số đầu là "chrome-extension://…/";
+    /// Firefox gọi với (đường dẫn file manifest của host, mã tiện ích).
+    /// </summary>
     public static bool IsHostInvocation(string[] args) =>
-        args.Length > 0 && args[0].StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase);
+        (args.Length > 0 && args[0].StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase))
+        || (args.Length > 1 && string.Equals(args[1], FirefoxExtensionId, StringComparison.Ordinal));
 
     public async Task RunAsync(CancellationToken ct)
     {
