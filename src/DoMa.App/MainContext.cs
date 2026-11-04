@@ -65,6 +65,7 @@ internal sealed class MainContext : ApplicationContext
         _manager.Removed += id => _lastStatus.Remove(id);
 
         _form = new MainForm(_manager, AddLinkAsync, OpenSettings, Exit, ExitOnShutdown, _log);
+        _form.ThreatFound = item => HandleThreat(item.Id, item.TargetPath);
         _schedule = new ScheduleService(_manager, () => _settings, text => _tray?.Notify(text, ShowNow), ConfirmPower);
         _form.QuickActions = new QuickActions(
             () => _settings.SpeedLimitKBps,
@@ -211,7 +212,8 @@ internal sealed class MainContext : ApplicationContext
         var settings = _settings;
         var path = item.TargetPath;
         var url = item.Request.Url;
-        _ = Task.Run(() => PostProcessAsync(path, url, settings));
+        var id = item.Id;
+        _ = Task.Run(() => PostProcessAsync(id, path, url, settings));
         if (_settings.NotifyOnComplete)
             _tray.Notify($"Đã tải xong: {Path.GetFileName(item.TargetPath)}", item.TargetPath, ToolTipIcon.Info);
     }
@@ -253,7 +255,47 @@ internal sealed class MainContext : ApplicationContext
     }
 
     /// <summary>Sau khi tải xong: đánh dấu tệp từ Internet, quét Defender, tự giải nén zip (tuỳ cài đặt).</summary>
-    private async Task PostProcessAsync(string path, string url, Settings settings)
+    /// <summary>
+    /// Defender báo có mã độc: đánh dấu đỏ trong danh sách (chặn mở) và hỏi người dùng có xoá tệp không.
+    /// Thường Defender đã tự cách ly tệp; khi đó chỉ cần báo cho người dùng biết.
+    /// </summary>
+    private void HandleThreat(Guid id, string path)
+    {
+        const string threat = "Windows Defender phát hiện";
+        try
+        {
+            _manager.MarkThreat(id, threat);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("threat", e, null);
+        }
+        var name = Path.GetFileName(path);
+        _tray.Notify($"Phát hiện mã độc trong {name}. Đừng mở tệp này.", ShowNow);
+        if (!File.Exists(path))
+        {
+            MessageBox.Show(_form.Visible ? _form : null,
+                $"Windows Defender phát hiện mã độc trong “{name}” và đã cách ly tệp này. Máy của bạn an toàn.\n\nTệp vẫn được đánh dấu đỏ trong danh sách để bạn biết nguồn tải không đáng tin.",
+                "Cảnh báo bảo mật", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        var answer = MessageBox.Show(_form.Visible ? _form : null,
+            $"Windows Defender phát hiện mã độc trong “{name}”.\n\nBạn có muốn xoá tệp này ngay không? (Khuyến nghị: Có)\nNếu giữ lại, tệp được đánh dấu đỏ và DoMa sẽ hỏi lại mỗi khi bạn mở.",
+            "Cảnh báo bảo mật", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1);
+        if (answer != System.Windows.Forms.DialogResult.Yes)
+            return;
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("threat", e, null);
+            MessageBox.Show(_form.Visible ? _form : null, "Không xoá được tệp. Có thể Windows Defender đang xử lý nó.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task PostProcessAsync(Guid id, string path, string url, Settings settings)
     {
         try
         {
@@ -265,7 +307,7 @@ internal sealed class MainContext : ApplicationContext
                 var result = await SecurityTools.ScanAsync(path, CancellationToken.None);
                 if (result == ScanResult.ThreatFound)
                 {
-                    PostToForm(() => _tray.Notify($"Windows Defender phát hiện mối nguy trong {Path.GetFileName(path)}. Không mở tệp này.", path, ToolTipIcon.Warning));
+                    PostToForm(() => HandleThreat(id, path));
                     return;
                 }
             }

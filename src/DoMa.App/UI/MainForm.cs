@@ -38,6 +38,10 @@ public sealed class MainForm : Form
 
     private readonly DownloadManager _manager;
     private readonly Func<string, Task> _addLink;
+
+    /// <summary>Khi quét thủ công phát hiện mã độc; MainContext ghi nhận và hỏi người dùng xử lý.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action<DownloadItem>? ThreatFound { get; set; }
     private readonly Action _openSettings;
     private readonly Action _requestExit;
     private readonly Action _shutdown;
@@ -167,7 +171,7 @@ public sealed class MainForm : Form
                 ForFirst(i =>
                 {
                     if (i.Status == DownloadStatus.Completed)
-                        OpenFile(i.TargetPath);
+                        OpenItem(i);
                 });
                 return true;
             case Keys.Escape when _search.Box.Focused && _search.Text.Length > 0:
@@ -175,6 +179,20 @@ public sealed class MainForm : Form
                 return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    /// <summary>Mở tệp đã tải; tệp bị phát hiện mã độc thì phải xác nhận lại.</summary>
+    private void OpenItem(DownloadItem item)
+    {
+        if (item.Threat is not null)
+        {
+            var answer = MessageBox.Show(this,
+                $"“{Path.GetFileName(item.TargetPath)}” bị phát hiện có mã độc ({item.Threat}).\n\nMở tệp này có thể làm hại máy tính và dữ liệu của bạn. Bạn vẫn muốn mở?",
+                "Cảnh báo bảo mật", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (answer != DialogResult.Yes)
+                return;
+        }
+        OpenFile(item.TargetPath);
     }
 
     public static void OpenFile(string path)
@@ -571,7 +589,7 @@ public sealed class MainForm : Form
         _grid.CellDoubleClick += (_, e) =>
         {
             if (e.RowIndex >= 0 && e.RowIndex < _view.Count && _view[e.RowIndex].Status == DownloadStatus.Completed)
-                OpenFile(_view[e.RowIndex].TargetPath);
+                OpenItem(_view[e.RowIndex]);
         };
         _grid.CellMouseDown += (_, e) =>
         {
@@ -690,7 +708,7 @@ public sealed class MainForm : Form
     private ContextMenuStrip BuildContextMenu()
     {
         var menu = ThemedRenderer.CreateMenu();
-        ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(i => OpenFile(i.TargetPath)));
+        ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(OpenItem));
         ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath)));
         ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink));
         menu.Items.Add(new ToolStripSeparator());
@@ -699,7 +717,7 @@ public sealed class MainForm : Form
             using var dialog = new HashForm(i.TargetPath);
             dialog.ShowDialog(this);
         }));
-        var scan = ThemedRenderer.Item(menu, "Quét bằng Windows Defender", IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i.TargetPath)));
+        var scan = ThemedRenderer.Item(menu, "Quét bằng Windows Defender", IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i)));
         var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
         menu.Items.Add(new ToolStripSeparator());
         ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
@@ -727,13 +745,20 @@ public sealed class MainForm : Form
 
     // ───────────────────────── Hành động ─────────────────────────
 
-    private async Task ScanAsync(string path)
+    private async Task ScanAsync(DownloadItem item)
     {
+        var path = item.TargetPath;
         var result = await Core.PostProcess.SecurityTools.ScanAsync(path, CancellationToken.None);
+        if (result == Core.PostProcess.ScanResult.ThreatFound)
+        {
+            ThreatFound?.Invoke(item);
+            return;
+        }
+        if (result == Core.PostProcess.ScanResult.Clean)
+            RunLogged(() => _manager.MarkThreat(item.Id, null));
         var (text, icon) = result switch
         {
             Core.PostProcess.ScanResult.Clean => ($"Không phát hiện mối nguy trong “{Path.GetFileName(path)}”.", MessageBoxIcon.Information),
-            Core.PostProcess.ScanResult.ThreatFound => ($"Windows Defender phát hiện mối nguy trong “{Path.GetFileName(path)}”. Đừng mở tệp này.", MessageBoxIcon.Warning),
             Core.PostProcess.ScanResult.Unavailable => ("Máy này không có Windows Defender.", MessageBoxIcon.Information),
             _ => ("Không quét được tệp. Windows Defender có thể đang tắt hoặc bị chương trình diệt virus khác thay thế.", MessageBoxIcon.Warning),
         };

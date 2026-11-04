@@ -57,6 +57,20 @@ public sealed class DownloadManagerTests : IDisposable
     }
 
     [Fact]
+    public void mark_threat_is_saved_and_cleared_on_restart()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), false);
+
+        m.MarkThreat(item.Id, "Defender");
+        Assert.Equal("Defender", m.Items.Single().Threat);
+        Assert.Equal("Defender", Manager().Items.Single().Threat);
+
+        m.Restart(item.Id);
+        Assert.Null(m.Items.Single().Threat);
+    }
+
+    [Fact]
     public void later_does_not_start()
     {
         var m = Manager();

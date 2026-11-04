@@ -63,6 +63,8 @@ public static class DownloadView
 
     public static string StatusText(DownloadItem item)
     {
+        if (item.Threat is not null)
+            return "Có mã độc";
         if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
             return item.ErrorMessage;
         var text = item.Status switch

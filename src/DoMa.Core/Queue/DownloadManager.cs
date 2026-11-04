@@ -134,6 +134,20 @@ public class DownloadManager
         }
     }
 
+    /// <summary>Ghi nhận (hoặc xoá, khi threat = null) cảnh báo mã độc cho một tệp.</summary>
+    public void MarkThreat(Guid id, string? threat)
+    {
+        lock (_gate)
+        {
+            var item = _items.FirstOrDefault(i => i.Id == id);
+            if (item is null || item.Threat == threat)
+                return;
+            item.Threat = threat;
+            Persist();
+            Raise(Changed, item);
+        }
+    }
+
     /// <summary>Dừng và đưa các tệp về hàng "Chờ tải sau" (dùng khi hết giờ tải theo lịch).</summary>
     public void Defer(IEnumerable<Guid> ids)
     {
@@ -233,6 +247,7 @@ public class DownloadManager
             item.Status = DownloadStatus.Queued;
             item.DownloadedBytes = 0;
             item.ErrorMessage = null;
+            item.Threat = null;
             item.CompletedAt = null;
             Persist();
             Raise(Changed, item);

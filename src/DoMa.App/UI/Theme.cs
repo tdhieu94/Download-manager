@@ -246,6 +246,8 @@ public static class Theme
 
     public static Color StatusColor(DownloadItem item)
     {
+        if (item.Threat is not null)
+            return Danger;
         if (!string.IsNullOrWhiteSpace(item.ErrorMessage) && item.Status != DownloadStatus.Completed)
             return Danger;
         return item.Status switch

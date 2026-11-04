@@ -17,7 +17,8 @@ public class DownloadStore(string dataDir)
         bool CanResume,
         string? ErrorMessage,
         DateTimeOffset AddedAt,
-        DateTimeOffset? CompletedAt);
+        DateTimeOffset? CompletedAt,
+        string? Threat = null);
 
     string FilePath => Path.Combine(dataDir, "downloads.json");
 
@@ -46,6 +47,7 @@ public class DownloadStore(string dataDir)
             ErrorMessage = s.ErrorMessage,
             AddedAt = s.AddedAt,
             CompletedAt = s.CompletedAt,
+            Threat = s.Threat,
         }).ToList();
     }
 
@@ -83,7 +85,8 @@ public class DownloadStore(string dataDir)
             i.CanResume,
             i.ErrorMessage,
             i.AddedAt,
-            i.CompletedAt)).ToList();
+            i.CompletedAt,
+            i.Threat)).ToList();
         JsonFile.Write(FilePath, stored);
     }
 }
