@@ -14,7 +14,9 @@ internal sealed class UpdateService : IDisposable
 {
     private const string AppTitle = "Download Manager (DoMa)";
     private static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20);
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(6);
+    private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
+    // Mở cửa sổ chính thì kiểm tra lại nếu lần trước đã cách quá khoảng này.
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(10);
 
     private readonly MainForm _form;
     private readonly TrayController _tray;
@@ -29,6 +31,7 @@ internal sealed class UpdateService : IDisposable
     private Version? _announced;
     private bool _checking;
     private bool _installing;
+    private DateTime _lastCheck = DateTime.MinValue;
 
     public UpdateService(MainForm form, TrayController tray, Func<Settings> settings, Action exitForUpdate, ErrorLog log)
     {
@@ -42,6 +45,11 @@ internal sealed class UpdateService : IDisposable
         {
             _timer.Interval = (int)Interval.TotalMilliseconds;
             if (_settings().AutoCheckUpdates)
+                await CheckAsync(manual: false);
+        };
+        _form.Activated += async (_, _) =>
+        {
+            if (_timer.Enabled && _settings().AutoCheckUpdates && DateTime.UtcNow - _lastCheck > StaleAfter)
                 await CheckAsync(manual: false);
         };
     }
@@ -61,6 +69,7 @@ internal sealed class UpdateService : IDisposable
         if (_checking || _installing)
             return;
         _checking = true;
+        _lastCheck = DateTime.UtcNow;
         try
         {
             var release = await _client.GetLatestAsync(_cts.Token);
@@ -94,7 +103,7 @@ internal sealed class UpdateService : IDisposable
         var title = $"Đã có DoMa {release.Version}";
         var detail = $"Bạn đang dùng bản {CurrentVersion}. Cập nhật mất chưa tới một phút, các tệp đang tải sẽ tự tải tiếp.";
         _form.ShowUpdate(title, detail, () => _ = InstallAsync(release), () => _dismissed = release.Version);
-        if (manual || !_form.Visible)
+        if (manual || !_form.Visible || !_form.ContainsFocus)
             _tray.Notify($"{title}. Bấm để xem.", ShowForm);
         if (manual)
             ShowForm();
