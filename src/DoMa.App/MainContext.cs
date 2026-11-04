@@ -8,6 +8,7 @@ using DoMa.Core.Engine;
 using DoMa.Core.Files;
 using DoMa.Core.Messaging;
 using DoMa.Core.Models;
+using DoMa.Core.PostProcess;
 using DoMa.Core.Queue;
 using DoMa.Core.Storage;
 
@@ -178,21 +179,8 @@ internal sealed class MainContext : ApplicationContext
     private void SetSpeedLimit(int kbps)
     {
         var current = _settings;
-        var updated = new Settings
-        {
-            RootFolder = current.RootFolder,
-            Extensions = current.Extensions,
-            ConnectionsPerFile = current.ConnectionsPerFile,
-            MaxConcurrent = current.MaxConcurrent,
-            RunAtStartup = current.RunAtStartup,
-            NotifyOnComplete = current.NotifyOnComplete,
-            AutoCheckUpdates = current.AutoCheckUpdates,
-            SpeedLimitKBps = Math.Max(0, kbps),
-            Appearance = current.Appearance,
-            ScheduleEnabled = current.ScheduleEnabled,
-            ScheduleStart = current.ScheduleStart,
-            ScheduleStop = current.ScheduleStop,
-        };
+        var updated = current.Clone();
+        updated.SpeedLimitKBps = Math.Max(0, kbps);
         try
         {
             _settingsStore.Save(updated);
@@ -220,6 +208,10 @@ internal sealed class MainContext : ApplicationContext
 
     private void OnCompleted(DownloadItem item)
     {
+        var settings = _settings;
+        var path = item.TargetPath;
+        var url = item.Request.Url;
+        _ = Task.Run(() => PostProcessAsync(path, url, settings));
         if (_settings.NotifyOnComplete)
             _tray.Notify($"Đã tải xong: {Path.GetFileName(item.TargetPath)}", item.TargetPath, ToolTipIcon.Info);
     }
@@ -257,6 +249,36 @@ internal sealed class MainContext : ApplicationContext
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
             _log.Write("update", e, null);
+        }
+    }
+
+    /// <summary>Sau khi tải xong: đánh dấu tệp từ Internet, quét Defender, tự giải nén zip (tuỳ cài đặt).</summary>
+    private async Task PostProcessAsync(string path, string url, Settings settings)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return;
+            SecurityTools.MarkFromInternet(path, url);
+            if (settings.ScanAfterDownload)
+            {
+                var result = await SecurityTools.ScanAsync(path, CancellationToken.None);
+                if (result == ScanResult.ThreatFound)
+                {
+                    PostToForm(() => _tray.Notify($"Windows Defender phát hiện mối nguy trong {Path.GetFileName(path)}. Không mở tệp này.", path, ToolTipIcon.Warning));
+                    return;
+                }
+            }
+            if (settings.AutoExtractZip && ArchiveExtractor.CanExtract(path))
+            {
+                var folder = ArchiveExtractor.Extract(path);
+                PostToForm(() => _tray.Notify($"Đã giải nén {Path.GetFileName(path)}", folder, ToolTipIcon.Info));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
+        {
+            _log.Write("postprocess", e, null);
+            PostToForm(() => _tray.Notify($"Không xử lý được {Path.GetFileName(path)} sau khi tải: {e.Message}", path, ToolTipIcon.Warning));
         }
     }
 

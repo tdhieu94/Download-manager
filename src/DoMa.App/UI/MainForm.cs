@@ -98,6 +98,9 @@ public sealed class MainForm : Form
         Controls.Add(BuildStatusBar());
         Controls.Add(BuildHeader());
 
+        foreach (var control in new Control[] { this, _grid, _nav })
+            EnableLinkDrop(control);
+
         _manager.Changed += _ => _dirty = true;
         _manager.Removed += _ => _dirty = true;
         _timer.Tick += (_, _) => RefreshView();
@@ -141,6 +144,22 @@ public sealed class MainForm : Form
                 _search.Box.Focus();
                 _search.Box.SelectAll();
                 return true;
+            case Keys.Control | Keys.V when !_search.Box.Focused:
+                string? clip = null;
+                try
+                {
+                    clip = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+                }
+                catch (ExternalException)
+                {
+                }
+                var pasted = ExtractLinks(clip);
+                if (pasted.Count > 0)
+                {
+                    _ = AddLinksAsync(pasted);
+                    return true;
+                }
+                break;
             case Keys.Delete when _grid.Focused:
                 RemoveSelected();
                 return true;
@@ -675,6 +694,14 @@ public sealed class MainForm : Form
         ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath)));
         ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink));
         menu.Items.Add(new ToolStripSeparator());
+        var hash = ThemedRenderer.Item(menu, "Kiểm tra mã băm…", IconKind.Hash, (_, _) => ForFirst(i =>
+        {
+            using var dialog = new HashForm(i.TargetPath);
+            dialog.ShowDialog(this);
+        }));
+        var scan = ThemedRenderer.Item(menu, "Quét bằng Windows Defender", IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i.TargetPath)));
+        var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
+        menu.Items.Add(new ToolStripSeparator());
         ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
         {
             var ids = SelectedIds();
@@ -685,11 +712,84 @@ public sealed class MainForm : Form
             });
         });
         ThemedRenderer.Item(menu, "Xoá", IconKind.Trash, (_, _) => RemoveSelected(), Theme.Danger);
-        menu.Opening += (_, e) => e.Cancel = _grid.SelectedRows.Count == 0;
+        menu.Opening += (_, e) =>
+        {
+            e.Cancel = _grid.SelectedRows.Count == 0;
+            var first = SelectedIds().Select(id => _manager.Items.FirstOrDefault(i => i.Id == id)).FirstOrDefault();
+            var done = first is { Status: DownloadStatus.Completed } && File.Exists(first.TargetPath);
+            hash.Enabled = done;
+            scan.Enabled = done && Core.PostProcess.SecurityTools.DefenderPath() is not null;
+            extract.Visible = first is not null && Core.PostProcess.ArchiveExtractor.CanExtract(first.TargetPath);
+            extract.Enabled = done;
+        };
         return menu;
     }
 
     // ───────────────────────── Hành động ─────────────────────────
+
+    private async Task ScanAsync(string path)
+    {
+        var result = await Core.PostProcess.SecurityTools.ScanAsync(path, CancellationToken.None);
+        var (text, icon) = result switch
+        {
+            Core.PostProcess.ScanResult.Clean => ($"Không phát hiện mối nguy trong “{Path.GetFileName(path)}”.", MessageBoxIcon.Information),
+            Core.PostProcess.ScanResult.ThreatFound => ($"Windows Defender phát hiện mối nguy trong “{Path.GetFileName(path)}”. Đừng mở tệp này.", MessageBoxIcon.Warning),
+            Core.PostProcess.ScanResult.Unavailable => ("Máy này không có Windows Defender.", MessageBoxIcon.Information),
+            _ => ("Không quét được tệp. Windows Defender có thể đang tắt hoặc bị chương trình diệt virus khác thay thế.", MessageBoxIcon.Warning),
+        };
+        MessageBox.Show(this, text, AppTitle, MessageBoxButtons.OK, icon);
+    }
+
+    private async Task ExtractAsync(string path)
+    {
+        try
+        {
+            var folder = await Task.Run(() => Core.PostProcess.ArchiveExtractor.Extract(path));
+            OpenFolder(folder);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
+        {
+            MessageBox.Show(this, "Không giải nén được: " + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>Lấy các link http/https từ văn bản (kéo-thả hoặc dán).</summary>
+    private static List<string> ExtractLinks(string? text) =>
+        (text ?? "").Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim().Trim('"', '<', '>'))
+            .Where(t => Uri.TryCreate(t, UriKind.Absolute, out var u) && u.Scheme is "http" or "https")
+            .Distinct()
+            .Take(20)
+            .ToList();
+
+    private static string? DroppedText(IDataObject? data)
+    {
+        if (data is null)
+            return null;
+        if (data.GetDataPresent(DataFormats.UnicodeText))
+            return data.GetData(DataFormats.UnicodeText) as string;
+        return data.GetDataPresent(DataFormats.Text) ? data.GetData(DataFormats.Text) as string : null;
+    }
+
+    private async Task AddLinksAsync(List<string> links)
+    {
+        foreach (var link in links)
+            await _addLink(link);
+    }
+
+    /// <summary>Cho phép kéo link từ trình duyệt thả vào bất kỳ đâu trên cửa sổ.</summary>
+    private void EnableLinkDrop(Control control)
+    {
+        control.AllowDrop = true;
+        control.DragEnter += (_, e) =>
+            e.Effect = ExtractLinks(DroppedText(e.Data)).Count > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        control.DragDrop += async (_, e) =>
+        {
+            var links = ExtractLinks(DroppedText(e.Data));
+            if (links.Count > 0)
+                await AddLinksAsync(links);
+        };
+    }
 
     private async Task AddLinkAsync()
     {

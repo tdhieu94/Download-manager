@@ -22,6 +22,14 @@ public class Settings
     /// <summary>Tốc độ tối đa cho tất cả lượt tải, KB/s (0 = không giới hạn).</summary>
     public int SpeedLimitKBps { get; set; }
 
+    /// <summary>Quét tệp vừa tải bằng Windows Defender.</summary>
+    public bool ScanAfterDownload { get; set; }
+
+    /// <summary>Tự giải nén tệp .zip vừa tải vào thư mục cùng tên.</summary>
+    public bool AutoExtractZip { get; set; }
+
+    public Settings Clone() => (Settings)MemberwiseClone();
+
     /// <summary>Giao diện: "System" (theo Windows), "Light" hoặc "Dark".</summary>
     public string Appearance { get; set; } = "System";
 
