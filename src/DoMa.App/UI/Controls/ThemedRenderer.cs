@@ -39,6 +39,38 @@ public sealed class ThemedRenderer() : ToolStripProfessionalRenderer(new Palette
         Theme.FillRound(g, Theme.Hover, r, 6);
     }
 
+    // Mặc định WinForms đặt chữ và icon theo hai cách tính khác nhau nên chữ bị lệch lên trên.
+    // Tự vẽ cả hai, căn giữa theo chiều cao của mục menu.
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        if (e.Item is not ToolStripMenuItem || e.Item.Owner is not ToolStripDropDown)
+        {
+            base.OnRenderItemText(e);
+            return;
+        }
+        var r = new Rectangle(e.TextRectangle.X, 0, e.Item.Width - e.TextRectangle.X - 4, e.Item.Height);
+        var color = e.Item.Enabled ? e.TextColor : Theme.TextMuted;
+        var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+            | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+        TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont ?? e.Item.Font, r, color, flags);
+    }
+
+    protected override void OnRenderItemImage(ToolStripItemImageRenderEventArgs e)
+    {
+        if (e.Image is null || e.Item.Owner is not ToolStripDropDown)
+        {
+            base.OnRenderItemImage(e);
+            return;
+        }
+        var size = e.ImageRectangle.Size;
+        var y = (e.Item.Height - size.Height) / 2;
+        var r = new Rectangle(e.ImageRectangle.X, y, size.Width, size.Height);
+        if (e.Item.Enabled)
+            e.Graphics.DrawImage(e.Image, r);
+        else
+            ControlPaint.DrawImageDisabled(e.Graphics, e.Image, r.X, r.Y, Theme.Surface);
+    }
+
     protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
     {
         using var pen = new Pen(Theme.BorderStrong);
