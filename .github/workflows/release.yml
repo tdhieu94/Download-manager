@@ -1,0 +1,64 @@
+name: Release
+
+# Đẩy một tag dạng v1.2.3 lên GitHub để build, test, đóng gói và đăng bản phát hành.
+# Ứng dụng DoMa đã cài sẽ tự thấy bản mới qua GitHub Releases.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lấy số phiên bản từ tag
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Tag phải có dạng v1.2.3 (nhận được ${{ github.ref_name }})" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Ghi phiên bản vào manifest của tiện ích
+        shell: pwsh
+        run: |
+          $path = "extension/manifest.json"
+          $text = Get-Content $path -Raw
+          $text = ([regex]'"version":\s*"[^"]*"').Replace($text, '"version": "${{ steps.ver.outputs.version }}"', 1)
+          [IO.File]::WriteAllText((Resolve-Path $path), $text)
+          Select-String -Path $path -Pattern '"version"'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Cài Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build, test và đóng gói
+        shell: pwsh
+        run: ./build.ps1 -Version ${{ steps.ver.outputs.version }}
+
+      - name: Tạo file SHA-256
+        shell: pwsh
+        run: |
+          $setup = "artifacts/DoMa-Setup-${{ steps.ver.outputs.version }}.exe"
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  DoMa-Setup-${{ steps.ver.outputs.version }}.exe" | Out-File "$setup.sha256" -Encoding ascii -NoNewline
+
+      - name: Đăng bản phát hành
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          gh release create "${{ github.ref_name }}" "artifacts/DoMa-Setup-$v.exe" "artifacts/DoMa-Setup-$v.exe.sha256" --title "DoMa $v" --generate-notes

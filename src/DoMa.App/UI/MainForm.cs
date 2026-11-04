@@ -1,0 +1,748 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
+using DoMa.App.UI.Controls;
+using DoMa.Core.Models;
+using DoMa.Core.Queue;
+using DoMa.Core.Storage;
+
+namespace DoMa.App.UI;
+
+public sealed class MainForm : Form
+{
+    private const string AppTitle = "Download Manager (DoMa)";
+
+    private static readonly NavItem[] NavEntries =
+    [
+        new(null, "Trạng thái", IconKind.None),
+        new(DownloadFilter.All, "Tất cả", IconKind.Inbox),
+        new(DownloadFilter.Active, "Đang tải", IconKind.Download),
+        new(DownloadFilter.Completed, "Đã xong", IconKind.Check),
+        new(DownloadFilter.Later, "Chờ tải sau", IconKind.Clock),
+        new(null, "Loại file", IconKind.None),
+        new(DownloadFilter.Documents, "Tài liệu", IconKind.Document),
+        new(DownloadFilter.Software, "Phần mềm", IconKind.Package),
+        new(DownloadFilter.Archives, "Nén", IconKind.Archive),
+        new(DownloadFilter.Other, "Khác", IconKind.Shapes),
+    ];
+
+    private readonly DownloadManager _manager;
+    private readonly Func<string, Task> _addLink;
+    private readonly Action _openSettings;
+    private readonly Action _requestExit;
+    private readonly Action _shutdown;
+    private readonly ErrorLog _log;
+    private readonly NavList _nav = new();
+    private readonly SmoothGrid _grid = new();
+    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = "Tìm theo tên file  (Ctrl+F)" };
+    private readonly Label _viewTitle = new() { Font = Theme.Title, ForeColor = Theme.Text, AutoSize = true };
+    private readonly Label _viewCount = new() { Font = Theme.Small, ForeColor = Theme.TextMuted, AutoSize = true };
+    private readonly ModernButton _resume = new("Tiếp tục", IconKind.Play);
+    private readonly ModernButton _pause = new("Tạm dừng", IconKind.Pause);
+    private readonly ModernButton _remove = new("Xoá", IconKind.Trash);
+    private readonly Panel _statusBar = new();
+    private readonly Panel _updateBanner = new();
+    private readonly ModernButton _updateNow = new("Cập nhật ngay", IconKind.Download, ButtonKind.Primary);
+    private readonly ModernButton _updateLater = new("Để sau", IconKind.None, ButtonKind.Ghost);
+    private string _updateTitle = "";
+    private string _updateDetail = "";
+    private Action? _onUpdate;
+    private Action? _onUpdateLater;
+    private readonly ToolTip _tips = new();
+    private readonly Bitmap _logo = Theme.AppIconSized(64).ToBitmap();
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
+    private List<DownloadItem> _view = [];
+    private string _statusLeft = "";
+    private string _statusRight = "";
+    private bool _anyActive;
+    private int _hoverRow = -1;
+    private bool _dirty = true;
+    private bool _exiting;
+
+    public MainForm(DownloadManager manager, Func<string, Task> addLink, Action openSettings, Action requestExit, Action shutdown, ErrorLog log)
+    {
+        _manager = manager;
+        _addLink = addLink;
+        _openSettings = openSettings;
+        _requestExit = requestExit;
+        _shutdown = shutdown;
+        _log = log;
+
+        Text = "DoMa — Trình quản lý tải xuống";
+        Icon = Theme.AppIcon;
+        StartPosition = FormStartPosition.CenterScreen;
+        Font = Theme.Body;
+        BackColor = Theme.Window;
+        ForeColor = Theme.Text;
+        ClientSize = new Size(S(1120), S(660));
+        MinimumSize = new Size(S(1020), S(520));
+        KeyPreview = true;
+
+        // Thứ tự Add quyết định thứ tự Dock: thêm sau được neo trước.
+        Controls.Add(BuildContent());
+        Controls.Add(BuildSidebar());
+        Controls.Add(BuildStatusBar());
+        Controls.Add(BuildHeader());
+
+        _manager.Changed += _ => _dirty = true;
+        _manager.Removed += _ => _dirty = true;
+        _timer.Tick += (_, _) => RefreshView();
+        _timer.Start();
+        RefreshView();
+        UpdateActions();
+    }
+
+    private int S(int value) => Theme.Scale(this, value);
+
+    public void ExitForReal() => _exiting = true;
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (!_exiting)
+        {
+            if (e.CloseReason == CloseReason.WindowsShutDown)
+            {
+                _shutdown();
+            }
+            else
+            {
+                e.Cancel = true;
+                if (e.CloseReason == CloseReason.UserClosing)
+                    Hide();
+                else
+                    BeginInvoke(_requestExit);
+            }
+        }
+        base.OnFormClosing(e);
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        switch (keyData)
+        {
+            case Keys.Control | Keys.N:
+                _ = AddLinkAsync();
+                return true;
+            case Keys.Control | Keys.F:
+                _search.Box.Focus();
+                _search.Box.SelectAll();
+                return true;
+            case Keys.Delete when _grid.Focused:
+                RemoveSelected();
+                return true;
+            case Keys.Enter when _grid.Focused:
+                ForFirst(i =>
+                {
+                    if (i.Status == DownloadStatus.Completed)
+                        OpenFile(i.TargetPath);
+                });
+                return true;
+            case Keys.Escape when _search.Box.Focused && _search.Text.Length > 0:
+                _search.Text = "";
+                return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    public static void OpenFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            MessageBox.Show("Không tìm thấy tệp trên ổ đĩa.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Win32Exception)
+        {
+            MessageBox.Show("Không mở được tệp.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    public static void OpenFolder(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                Process.Start("explorer.exe", $"/select,\"{path}\"");
+            else if (Path.GetDirectoryName(path) is { } dir && Directory.Exists(dir))
+                Process.Start("explorer.exe", $"\"{dir}\"");
+        }
+        catch (Win32Exception)
+        {
+            MessageBox.Show("Không mở được thư mục.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    // ───────────────────────── Đầu trang ─────────────────────────
+
+    private Control BuildHeader()
+    {
+        var header = new Panel { Dock = DockStyle.Top, Height = S(64), BackColor = Theme.Surface };
+        header.Paint += (_, e) =>
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            var logo = S(34);
+            g.DrawImage(_logo, new Rectangle(S(22), (header.Height - logo) / 2, logo, logo));
+            TextRenderer.DrawText(g, "DoMa", Theme.Brand, new Point(S(66), S(12)), Theme.Text, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, "Trình quản lý tải xuống", Theme.Small, new Point(S(67), S(35)), Theme.TextMuted, TextFormatFlags.NoPadding);
+            using var pen = new Pen(Theme.Border);
+            g.DrawLine(pen, 0, header.Height - 1, header.Width, header.Height - 1);
+        };
+
+        var add = new ModernButton("Thêm link", IconKind.Plus, ButtonKind.Primary);
+        add.Click += async (_, _) => await AddLinkAsync();
+        _tips.SetToolTip(add, "Thêm đường dẫn tải mới (Ctrl+N)");
+
+        var settings = new ModernButton("Cài đặt", IconKind.Settings, ButtonKind.Ghost) { IconOnly = true };
+        settings.Click += (_, _) => _openSettings();
+        _tips.SetToolTip(settings, "Cài đặt");
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.RightToLeft,
+            AutoSize = true,
+            WrapContents = false,
+            Padding = new Padding(0, S(15), S(16), 0),
+            BackColor = Theme.Surface,
+        };
+        settings.Margin = new Padding(S(6), 0, 0, 0);
+        add.Margin = new Padding(0);
+        actions.Controls.Add(settings);
+        actions.Controls.Add(add);
+        header.Controls.Add(actions);
+        return header;
+    }
+
+    // ───────────────────────── Thanh bên ─────────────────────────
+
+    private Control BuildSidebar()
+    {
+        var side = new Panel { Dock = DockStyle.Left, Width = S(236), BackColor = Theme.Window, Padding = new Padding(S(6), S(10), 0, 0) };
+        foreach (var entry in NavEntries)
+            _nav.Add(entry);
+        _nav.Dock = DockStyle.Fill;
+        _nav.SelectionChanged += (_, _) =>
+        {
+            _dirty = true;
+            RefreshView();
+        };
+        side.Controls.Add(_nav);
+        return side;
+    }
+
+    // ───────────────────────── Thanh trạng thái ─────────────────────────
+
+    private Control BuildStatusBar()
+    {
+        _statusBar.Dock = DockStyle.Bottom;
+        _statusBar.Height = S(32);
+        _statusBar.BackColor = Theme.Window;
+        _statusBar.Paint += (_, e) =>
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var dot = S(8);
+            using (var brush = new SolidBrush(_anyActive ? Theme.Success : Theme.Neutral))
+                g.FillEllipse(brush, S(24), (_statusBar.Height - dot) / 2f, dot, dot);
+            TextRenderer.DrawText(g, _statusLeft, Theme.Small, new Rectangle(S(40), 0, _statusBar.Width / 2, _statusBar.Height), Theme.TextSecondary,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, _statusRight, Theme.Small, new Rectangle(_statusBar.Width / 2, 0, _statusBar.Width / 2 - S(24), _statusBar.Height), Theme.TextMuted,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Right | TextFormatFlags.NoPadding);
+        };
+        return _statusBar;
+    }
+
+    // ───────────────────────── Nội dung chính ─────────────────────────
+
+    private Control BuildContent()
+    {
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Window, Padding = new Padding(S(4), S(16), S(20), S(4)) };
+        var card = new Card { Dock = DockStyle.Fill, Padding = new Padding(S(6), S(2), S(6), S(8)) };
+
+        var top = new Panel { Dock = DockStyle.Top, Height = S(72), BackColor = Theme.Surface };
+        _viewTitle.Location = new Point(S(16), S(14));
+        _viewCount.Location = new Point(S(18), S(44));
+        top.Controls.Add(_viewTitle);
+        top.Controls.Add(_viewCount);
+
+        var tools = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.LeftToRight,
+            AutoSize = true,
+            WrapContents = false,
+            Padding = new Padding(0, S(19), S(10), 0),
+            BackColor = Theme.Surface,
+        };
+        _search.Size = new Size(S(220), S(34));
+        _search.Margin = new Padding(0, 0, S(12), 0);
+        _search.TextChanged += (_, _) =>
+        {
+            _dirty = true;
+            RefreshView();
+        };
+        _resume.Click += (_, _) => _manager.Resume(SelectedIds());
+        _pause.Click += (_, _) => _manager.Pause(SelectedIds());
+        _remove.Click += (_, _) => RemoveSelected();
+        _tips.SetToolTip(_resume, "Tiếp tục tải các tệp đã chọn");
+        _tips.SetToolTip(_pause, "Tạm dừng các tệp đã chọn");
+        _tips.SetToolTip(_remove, "Xoá các tệp đã chọn (Delete)");
+        foreach (var b in new[] { _resume, _pause, _remove })
+            b.Margin = new Padding(0, 0, S(6), 0);
+        tools.Controls.AddRange([_search, _resume, _pause, _remove]);
+        top.Controls.Add(tools);
+
+        BuildGrid();
+        card.Controls.Add(_grid);
+        card.Controls.Add(top);
+        content.Controls.Add(card);
+        content.Controls.Add(BuildUpdateBanner());
+        return content;
+    }
+
+    private Control BuildUpdateBanner()
+    {
+        _updateBanner.Dock = DockStyle.Top;
+        _updateBanner.Height = S(68);
+        _updateBanner.BackColor = Theme.Window;
+        _updateBanner.Visible = false;
+        _updateBanner.Paint += (_, e) =>
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var box = new RectangleF(0.5f, 0.5f, _updateBanner.Width - 1.5f, _updateBanner.Height - S(12));
+            Theme.FillRound(g, Theme.AccentSoft, box, S(10));
+            Theme.DrawRound(g, Theme.AccentSoftStrong, box, S(10));
+            var icon = S(20);
+            Icons.Draw(g, IconKind.Download, new RectangleF(S(16), box.Y + (box.Height - icon) / 2, icon, icon), Theme.Accent);
+            var textW = _updateLater.Left - S(60);
+            TextRenderer.DrawText(g, _updateTitle, Theme.BodySemibold, new Rectangle(S(48), (int)box.Y + S(9), textW, S(20)), Theme.AccentPressed,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, _updateDetail, Theme.Small, new Rectangle(S(48), (int)box.Y + S(29), textW, S(18)), Theme.TextSecondary,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+        };
+        foreach (var b in new[] { _updateNow, _updateLater })
+        {
+            b.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _updateBanner.Controls.Add(b);
+        }
+        _updateBanner.Resize += (_, _) => LayoutBanner();
+        _updateBanner.BackColorChanged += (_, _) => LayoutBanner();
+        _updateNow.Click += (_, _) => _onUpdate?.Invoke();
+        _updateLater.Click += (_, _) =>
+        {
+            _updateBanner.Visible = false;
+            _onUpdateLater?.Invoke();
+        };
+        return _updateBanner;
+    }
+
+    private void LayoutBanner()
+    {
+        var y = (_updateBanner.Height - S(12) - S(34)) / 2;
+        _updateNow.Location = new Point(_updateBanner.Width - _updateNow.Width - S(12), y);
+        _updateLater.Location = new Point(_updateNow.Left - _updateLater.Width - S(6), y);
+        _updateBanner.Invalidate();
+    }
+
+    /// <summary>Hiện dải thông báo có bản cập nhật mới phía trên danh sách tải.</summary>
+    public void ShowUpdate(string title, string detail, Action install, Action later)
+    {
+        _updateTitle = title;
+        _updateDetail = detail;
+        _onUpdate = install;
+        _onUpdateLater = later;
+        _updateNow.Enabled = true;
+        _updateLater.Visible = true;
+        _updateBanner.Visible = true;
+        LayoutBanner();
+    }
+
+    /// <summary>Cập nhật dòng mô tả của dải thông báo (ví dụ tiến độ tải bộ cài).</summary>
+    public void SetUpdateStatus(string detail, bool busy)
+    {
+        _updateDetail = detail;
+        _updateNow.Enabled = !busy;
+        _updateLater.Visible = !busy;
+        _updateBanner.Invalidate();
+    }
+
+    private void BuildGrid()
+    {
+        _grid.Dock = DockStyle.Fill;
+        _grid.VirtualMode = true;
+        _grid.ReadOnly = true;
+        _grid.AllowUserToAddRows = false;
+        _grid.AllowUserToDeleteRows = false;
+        _grid.AllowUserToResizeRows = false;
+        _grid.MultiSelect = true;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.RowHeadersVisible = false;
+        _grid.BackgroundColor = Theme.Surface;
+        _grid.BorderStyle = BorderStyle.None;
+        _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _grid.GridColor = Color.FromArgb(238, 242, 247);
+        _grid.EnableHeadersVisualStyles = false;
+        _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.ColumnHeadersHeight = S(38);
+        _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = Theme.SurfaceAlt,
+            ForeColor = Theme.TextMuted,
+            SelectionBackColor = Theme.SurfaceAlt,
+            SelectionForeColor = Theme.TextMuted,
+            Font = Theme.SmallBold,
+            Padding = new Padding(S(10), 0, S(8), 0),
+            Alignment = DataGridViewContentAlignment.MiddleLeft,
+        };
+        _grid.DefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = Theme.Surface,
+            ForeColor = Theme.Text,
+            SelectionBackColor = Theme.AccentSoft,
+            SelectionForeColor = Theme.Text,
+            Font = Theme.Body,
+            Padding = new Padding(S(10), 0, S(8), 0),
+            WrapMode = DataGridViewTriState.False,
+        };
+        _grid.RowTemplate.Height = S(54);
+
+        var muted = new DataGridViewCellStyle { ForeColor = Theme.TextSecondary, SelectionForeColor = Theme.TextSecondary };
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = "TÊN FILE", FillWeight = 40, MinimumWidth = S(200) });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Size", HeaderText = "DUNG LƯỢNG", FillWeight = 13, DefaultCellStyle = muted });
+        _grid.Columns.Add(new ProgressColumn { Name = "Progress", HeaderText = "TIẾN ĐỘ", FillWeight = 22 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Speed", HeaderText = "TỐC ĐỘ", FillWeight = 12, DefaultCellStyle = muted });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Eta", HeaderText = "CÒN LẠI", FillWeight = 12, DefaultCellStyle = muted });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "TRẠNG THÁI", FillWeight = 22 });
+        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        foreach (DataGridViewColumn column in _grid.Columns)
+            column.SortMode = DataGridViewColumnSortMode.NotSortable;
+
+        _grid.CellValueNeeded += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= _view.Count)
+                return;
+            var item = _view[e.RowIndex];
+            e.Value = e.ColumnIndex switch
+            {
+                0 => Path.GetFileName(item.TargetPath),
+                1 => SizeFormatter.Format(item.TotalBytes),
+                2 => new ProgressValue(
+                    item.Status == DownloadStatus.Completed ? 100 : DownloadView.Percent(item.DownloadedBytes, item.TotalBytes),
+                    Theme.StatusColor(item)),
+                3 => DownloadView.FormatSpeed(_manager.SpeedBytesPerSec(item.Id)),
+                4 => DownloadView.FormatEta(_manager.Eta(item.Id)),
+                _ => DownloadView.StatusText(item),
+            };
+        };
+        _grid.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.RowIndex == _hoverRow && e.CellStyle is not null)
+                e.CellStyle.BackColor = Theme.SurfaceAlt;
+        };
+        _grid.CellPainting += PaintCell;
+        _grid.ShowCellToolTips = true;
+        _grid.CellToolTipTextNeeded += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= _view.Count)
+                return;
+            var item = _view[e.RowIndex];
+            e.ToolTipText = e.ColumnIndex switch
+            {
+                0 => $"{item.TargetPath}\n{item.Request.Url}",
+                5 => DownloadView.StatusText(item),
+                _ => "",
+            };
+        };
+        _grid.Paint += PaintEmptyState;
+        _grid.CellMouseEnter += (_, e) => SetHoverRow(e.RowIndex);
+        _grid.MouseLeave += (_, _) => SetHoverRow(-1);
+        _grid.CellDoubleClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.RowIndex < _view.Count && _view[e.RowIndex].Status == DownloadStatus.Completed)
+                OpenFile(_view[e.RowIndex].TargetPath);
+        };
+        _grid.CellMouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && !_grid.Rows[e.RowIndex].Selected)
+            {
+                _grid.ClearSelection();
+                _grid.Rows[e.RowIndex].Selected = true;
+            }
+        };
+        _grid.SelectionChanged += (_, _) => UpdateActions();
+        _grid.ContextMenuStrip = BuildContextMenu();
+    }
+
+    private void SetHoverRow(int row)
+    {
+        if (row == _hoverRow)
+            return;
+        var old = _hoverRow;
+        _hoverRow = row;
+        if (old >= 0 && old < _grid.RowCount)
+            _grid.InvalidateRow(old);
+        if (row >= 0 && row < _grid.RowCount)
+            _grid.InvalidateRow(row);
+    }
+
+    private void PaintCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        var g = e.Graphics;
+        if (g is null || e.CellStyle is null)
+            return;
+
+        if (e.RowIndex < 0)
+        {
+            e.PaintBackground(e.CellBounds, false);
+            if (e.ColumnIndex >= 0)
+            {
+                TextRenderer.DrawText(g, e.Value?.ToString(), Theme.SmallBold,
+                    new Rectangle(e.CellBounds.X + S(10), e.CellBounds.Y, e.CellBounds.Width - S(14), e.CellBounds.Height), Theme.TextMuted,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            }
+            using var pen = new Pen(Theme.Border);
+            g.DrawLine(pen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+            e.Handled = true;
+            return;
+        }
+        if (e.RowIndex >= _view.Count || e.ColumnIndex is not (0 or 5))
+            return;
+
+        var item = _view[e.RowIndex];
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+        e.PaintBackground(e.CellBounds, selected);
+        var state = g.Save();
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var bounds = e.CellBounds;
+
+        if (e.ColumnIndex == 0)
+        {
+            var color = Theme.CategoryColor(item.Category);
+            var tile = new RectangleF(bounds.X + S(10), bounds.Y + (bounds.Height - S(34)) / 2f, S(34), S(34));
+            Theme.FillRound(g, Theme.Tint(color, 0.87f), tile, S(9));
+            Icons.Draw(g, Theme.CategoryIcon(item.Category), RectangleF.Inflate(tile, -S(9), -S(9)), color);
+
+            var textX = (int)tile.Right + S(12);
+            var textW = bounds.Right - textX - S(8);
+            var host = Uri.TryCreate(item.Request.Url, UriKind.Absolute, out var uri) ? uri.Host : item.Request.Url;
+            TextRenderer.DrawText(g, e.Value?.ToString(), Theme.BodySemibold, new Rectangle(textX, bounds.Y + S(8), textW, S(20)), Theme.Text,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, $"{Theme.CategoryName(item.Category)} · {host}", Theme.Small, new Rectangle(textX, bounds.Y + S(29), textW, S(18)), Theme.TextMuted,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        }
+        else
+        {
+            var color = Theme.StatusColor(item);
+            var text = e.Value?.ToString() ?? "";
+            var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
+            var maxText = bounds.Width - S(46);
+            var measured = TextRenderer.MeasureText(g, text, Theme.SmallBold, new Size(maxText, S(24)), flags);
+            var pillW = Math.Min(measured.Width, maxText) + S(28);
+            var pill = new RectangleF(bounds.X + S(10), bounds.Y + (bounds.Height - S(24)) / 2f, pillW, S(24));
+            Theme.FillRound(g, Theme.Tint(color, 0.88f), pill, S(12));
+            var dot = S(7);
+            using (var brush = new SolidBrush(color))
+                g.FillEllipse(brush, pill.X + S(9), pill.Y + (pill.Height - dot) / 2f, dot, dot);
+            var textColor = Color.FromArgb(Math.Max(0, color.R - 40), Math.Max(0, color.G - 40), Math.Max(0, color.B - 40));
+            TextRenderer.DrawText(g, text, Theme.SmallBold, Rectangle.Round(new RectangleF(pill.X + S(21), pill.Y, pill.Width - S(27), pill.Height)), textColor, flags);
+        }
+
+        g.Restore(state);
+        e.Paint(e.CellBounds, DataGridViewPaintParts.Border);
+        e.Handled = true;
+    }
+
+    private void PaintEmptyState(object? sender, PaintEventArgs e)
+    {
+        if (_view.Count > 0)
+            return;
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var area = new Rectangle(0, _grid.ColumnHeadersHeight, _grid.Width, _grid.Height - _grid.ColumnHeadersHeight);
+        var cy = area.Y + area.Height / 2 - S(40);
+        var circle = new RectangleF(area.X + area.Width / 2f - S(32), cy - S(32), S(64), S(64));
+        using (var brush = new SolidBrush(Theme.AccentSoft))
+            g.FillEllipse(brush, circle);
+        var searching = _search.Text.Trim().Length > 0;
+        Icons.Draw(g, searching ? IconKind.Search : IconKind.Download, RectangleF.Inflate(circle, -S(18), -S(18)), Theme.Accent);
+        var title = searching ? "Không tìm thấy tệp phù hợp" : "Chưa có tệp nào ở đây";
+        var hint = searching
+            ? "Thử từ khoá khác hoặc xoá ô tìm kiếm."
+            : "Bấm “Thêm link” hoặc tải từ trình duyệt — tệp sẽ xuất hiện tại đây.";
+        TextRenderer.DrawText(g, title, Theme.Subtitle, new Rectangle(area.X, (int)circle.Bottom + S(16), area.Width, S(28)), Theme.Text,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.Top);
+        TextRenderer.DrawText(g, hint, Theme.Body, new Rectangle(area.X, (int)circle.Bottom + S(46), area.Width, S(24)), Theme.TextMuted,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.Top);
+    }
+
+    private ContextMenuStrip BuildContextMenu()
+    {
+        var menu = ThemedRenderer.CreateMenu();
+        ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(i => OpenFile(i.TargetPath)));
+        ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath)));
+        ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink));
+        menu.Items.Add(new ToolStripSeparator());
+        ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
+        {
+            var ids = SelectedIds();
+            RunLogged(() =>
+            {
+                foreach (var id in ids)
+                    _manager.Restart(id);
+            });
+        });
+        ThemedRenderer.Item(menu, "Xoá", IconKind.Trash, (_, _) => RemoveSelected(), Theme.Danger);
+        menu.Opening += (_, e) => e.Cancel = _grid.SelectedRows.Count == 0;
+        return menu;
+    }
+
+    // ───────────────────────── Hành động ─────────────────────────
+
+    private async Task AddLinkAsync()
+    {
+        var url = PromptLink();
+        if (url is not null)
+            await _addLink(url);
+    }
+
+    private string? PromptLink()
+    {
+        using var dialog = new AddLinkForm();
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return null;
+        var text = dialog.Link;
+        if (Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+            return text;
+        MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return null;
+    }
+
+    private void RemoveSelected()
+    {
+        var ids = SelectedIds();
+        if (ids.Count == 0)
+            return;
+        var answer = MessageBox.Show(this, "Xoá luôn tệp trên ổ đĩa?", "Xoá", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        if (answer == DialogResult.Cancel)
+            return;
+        RunLogged(() => _manager.Remove(ids, answer == DialogResult.Yes));
+    }
+
+    private void RunLogged(Action action) => Task.Run(() =>
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            _log.Write("main", e, null);
+        }
+    });
+
+    private static void CopyLink(DownloadItem item)
+    {
+        try
+        {
+            Clipboard.SetText(item.Request.Url);
+        }
+        catch (ExternalException)
+        {
+        }
+    }
+
+    private List<Guid> SelectedIds() =>
+        _grid.SelectedRows.Cast<DataGridViewRow>()
+            .Where(r => r.Index < _view.Count)
+            .OrderBy(r => r.Index)
+            .Select(r => _view[r.Index].Id)
+            .ToList();
+
+    private void ForFirst(Action<DownloadItem> action)
+    {
+        var ids = SelectedIds();
+        if (ids.Count == 0)
+            return;
+        var item = _manager.Items.FirstOrDefault(i => i.Id == ids[0]);
+        if (item is not null)
+            action(item);
+    }
+
+    private void UpdateActions()
+    {
+        var selected = _grid.SelectedRows.Cast<DataGridViewRow>().Where(r => r.Index < _view.Count).Select(r => _view[r.Index]).ToList();
+        _resume.Enabled = selected.Any(i => i.Status != DownloadStatus.Completed);
+        _pause.Enabled = selected.Any(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued);
+        _remove.Enabled = selected.Count > 0;
+    }
+
+    // ───────────────────────── Làm mới ─────────────────────────
+
+    private void RefreshView()
+    {
+        if (!Visible && !_dirty)
+            return;
+        var items = _manager.Items;
+        foreach (var entry in _nav.Items)
+        {
+            if (entry.Filter is { } filter)
+                entry.Count = DownloadView.Count(filter, items);
+        }
+        _nav.Invalidate();
+
+        var current = _nav.Selected;
+        var query = _search.Text.Trim();
+        var next = items
+            .Where(i => DownloadView.Matches(current, i))
+            .Where(i => query.Length == 0 || Path.GetFileName(i.TargetPath).Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            .ToList();
+        if (_view.Select(i => i.Id).SequenceEqual(next.Select(i => i.Id)))
+        {
+            _view = next;
+            _grid.Invalidate();
+        }
+        else
+        {
+            var selected = SelectedIds().ToHashSet();
+            _view = next;
+            _grid.RowCount = 0;
+            _grid.RowCount = next.Count;
+            for (var i = 0; i < next.Count; i++)
+                _grid.Rows[i].Selected = selected.Contains(next[i].Id);
+            _grid.Invalidate();
+        }
+
+        _viewTitle.Text = _nav.SelectedItem?.Text ?? "Tất cả";
+        _viewCount.Text = query.Length == 0 ? $"{next.Count} tệp" : $"{next.Count} tệp khớp “{query}”";
+
+        var downloading = items.Where(i => i.Status == DownloadStatus.Downloading).ToList();
+        var totalSpeed = downloading.Sum(i => _manager.SpeedBytesPerSec(i.Id));
+        var queued = items.Count(i => i.Status == DownloadStatus.Queued);
+        _anyActive = downloading.Count > 0;
+        _statusLeft = downloading.Count == 0
+            ? (queued > 0 ? $"Không có tệp đang tải · {queued} đang chờ" : "Sẵn sàng")
+            : $"{downloading.Count} tệp đang tải" + (totalSpeed > 0 ? $" · {DownloadView.FormatSpeed(totalSpeed)}" : "") + (queued > 0 ? $" · {queued} đang chờ" : "");
+        _statusRight = $"Tổng cộng {items.Count} tệp · {items.Count(i => i.Status == DownloadStatus.Completed)} đã xong";
+        _statusBar.Invalidate();
+        UpdateActions();
+        _dirty = false;
+    }
+}
+
+/// <summary>DataGridView có bật double-buffer để cuộn và cập nhật không bị nháy.</summary>
+public sealed class SmoothGrid : DataGridView
+{
+    public SmoothGrid()
+    {
+        DoubleBuffered = true;
+    }
+}

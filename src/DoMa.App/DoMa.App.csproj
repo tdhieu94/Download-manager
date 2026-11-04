@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>DoMa</AssemblyName>
+    <RootNamespace>DoMa.App</RootNamespace>
+    <ApplicationIcon>Assets\doma.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\doma.ico" LogicalName="DoMa.App.doma.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DoMa.Core\DoMa.Core.csproj" />
+  </ItemGroup>
+</Project>

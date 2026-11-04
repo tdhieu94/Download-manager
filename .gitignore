@@ -1,0 +1,14 @@
+bin/
+obj/
+artifacts/
+node_modules/
+.vs/
+TestResults/
+*.user
+*.suo
+
+# Tài liệu nội bộ / công cụ AI, không đưa lên repo
+docs/superpowers/
+.superpowers/
+.claude/
+CLAUDE.md

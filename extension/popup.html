@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Download Manager (DoMa)</title>
+<style>
+body { font: 13px Segoe UI, sans-serif; width: 240px; margin: 12px; }
+#status { margin-bottom: 10px; font-weight: 600; }
+#status.on { color: #2e7d32; }
+#status.off { color: #c62828; }
+label { display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+<div id="status">Đang kiểm tra…</div>
+<label><input type="checkbox" id="enabled" checked> Bắt link</label>
+<script src="popup.js" type="module"></script>
+</body>
+</html>
