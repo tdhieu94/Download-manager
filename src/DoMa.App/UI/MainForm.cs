@@ -584,7 +584,6 @@ public sealed class MainForm : Form
             var item = _view[e.RowIndex];
             e.ToolTipText = e.ColumnIndex switch
             {
-                0 => $"{item.TargetPath}\n{item.Request.Url}",
                 5 => DownloadView.StatusText(item),
                 _ => "",
             };
@@ -716,6 +715,7 @@ public sealed class MainForm : Form
         var menu = ThemedRenderer.CreateMenu();
         ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(OpenItem));
         ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath)));
+        var source = ThemedRenderer.Item(menu, "Mở trang nguồn", IconKind.Link, (_, _) => ForFirst(OpenSource));
         ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink));
         menu.Items.Add(new ToolStripSeparator());
         var hash = ThemedRenderer.Item(menu, "Kiểm tra mã băm…", IconKind.Hash, (_, _) => ForFirst(i =>
@@ -741,6 +741,7 @@ public sealed class MainForm : Form
             e.Cancel = _grid.SelectedRows.Count == 0;
             var first = SelectedIds().Select(id => _manager.Items.FirstOrDefault(i => i.Id == id)).FirstOrDefault();
             var done = first is { Status: DownloadStatus.Completed } && File.Exists(first.TargetPath);
+            source.Enabled = first is not null && SourceUrl(first) is not null;
             hash.Enabled = done;
             scan.Enabled = done && Core.PostProcess.SecurityTools.DefenderPath() is not null;
             extract.Visible = first is not null && Core.PostProcess.ArchiveExtractor.CanExtract(first.TargetPath);
@@ -863,6 +864,32 @@ public sealed class MainForm : Form
             _log.Write("main", e, null);
         }
     });
+
+    /// <summary>Trang web nơi đã bấm tải (Referrer); nếu không có thì chính link tải. Chỉ nhận http/https.</summary>
+    private static string? SourceUrl(DownloadItem item)
+    {
+        foreach (var candidate in new[] { item.Request.Referrer, item.Request.Url })
+        {
+            if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+                return uri.AbsoluteUri;
+        }
+        return null;
+    }
+
+    /// <summary>Truy ngược nguồn tải: mở trang đã tải tệp này trong trình duyệt mặc định.</summary>
+    private static void OpenSource(DownloadItem item)
+    {
+        if (SourceUrl(item) is not { } url)
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Win32Exception)
+        {
+            MessageBox.Show("Không mở được trình duyệt.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
 
     private static void CopyLink(DownloadItem item)
     {
