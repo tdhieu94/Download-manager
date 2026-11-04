@@ -80,6 +80,20 @@ public sealed class DownloadManagerTests : IDisposable
     }
 
     [Fact]
+    public void defer_moves_running_and_queued_back_to_later()
+    {
+        _settings.MaxConcurrent = 1;
+        var m = Manager();
+        var running = m.Add(Req("https://h/r"), Target("r.bin"), true);
+        var queued = m.Add(Req("https://h/q"), Target("q.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/r"));
+
+        m.Defer([running.Id, queued.Id]);
+        WaitUntil(() => StatusOf(m, running.Id) == DownloadStatus.Later);
+        Assert.Equal(DownloadStatus.Later, StatusOf(m, queued.Id));
+    }
+
+    [Fact]
     public void pause_then_resume()
     {
         var m = Manager();

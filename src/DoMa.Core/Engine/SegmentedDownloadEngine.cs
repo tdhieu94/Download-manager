@@ -16,6 +16,9 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
     public TimeSpan BodyTimeout { get; init; } = TimeSpan.FromSeconds(60);
     public TimeSpan HeaderTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>Bộ giới hạn tốc độ dùng chung cho mọi lượt tải (null = không giới hạn).</summary>
+    public BandwidthLimiter? Limiter { get; init; }
+
     public async Task<EngineResult> RunAsync(DownloadJob job, IProgress<EngineProgress> progress, CancellationToken pauseToken)
     {
         var partPath = job.TargetPath + ".part";
@@ -218,6 +221,8 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         while ((read = await ReadAsync(body, buffer, idle, ct)) > 0)
         {
             var take = run.Claim(segment, position, read);
+            if (Limiter is not null)
+                await Limiter.WaitAsync(take, ct);
             await WriteAsync(run.Handle, buffer.AsMemory(0, take), position, ct);
             position += take;
             if (run.Advance(segment, take))
@@ -273,6 +278,8 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         int read;
         while ((read = await ReadAsync(body, buffer, idle, run.PauseToken)) > 0)
         {
+            if (Limiter is not null)
+                await Limiter.WaitAsync(read, run.PauseToken);
             await WriteAsync(run.Handle, buffer.AsMemory(0, read), position, run.PauseToken);
             position += read;
             run.Advance(segment, read);

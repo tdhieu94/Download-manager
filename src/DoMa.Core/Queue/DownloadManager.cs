@@ -134,6 +134,29 @@ public class DownloadManager
         }
     }
 
+    /// <summary>Dừng và đưa các tệp về hàng "Chờ tải sau" (dùng khi hết giờ tải theo lịch).</summary>
+    public void Defer(IEnumerable<Guid> ids)
+    {
+        lock (_gate)
+        {
+            foreach (var item in Find(ids))
+            {
+                if (_running.TryGetValue(item.Id, out var run))
+                {
+                    run.ResumeRequested = false;
+                    run.DeferRequested = true;
+                    run.Cts.Cancel();
+                }
+                else if (item.Status is DownloadStatus.Queued or DownloadStatus.Paused)
+                {
+                    item.Status = DownloadStatus.Later;
+                    Raise(Changed, item);
+                }
+            }
+            Persist();
+        }
+    }
+
     public void Remove(IEnumerable<Guid> ids, bool deleteFiles)
     {
         var removed = new List<(DownloadItem Item, Run? Run)>();
@@ -373,7 +396,9 @@ public class DownloadManager
                     item.Request = item.Request with { Cookies = null };
                     break;
                 case EngineOutcome.Paused:
-                    item.Status = run.ResumeRequested ? DownloadStatus.Queued : DownloadStatus.Paused;
+                    item.Status = run.ResumeRequested ? DownloadStatus.Queued
+                        : run.DeferRequested ? DownloadStatus.Later
+                        : DownloadStatus.Paused;
                     break;
                 case EngineOutcome.NeedsRestart:
                     item.Status = DownloadStatus.Paused;
@@ -418,6 +443,7 @@ public class DownloadManager
         public Task Task { get; set; } = Task.CompletedTask;
         public bool Removed { get; set; }
         public bool ResumeRequested { get; set; }
+        public bool DeferRequested { get; set; }
         public string? FinalPath { get; set; }
 
         public void Report(EngineProgress value) => owner.OnProgress(this, value);

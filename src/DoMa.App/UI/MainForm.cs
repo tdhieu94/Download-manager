@@ -9,6 +9,15 @@ using DoMa.Core.Storage;
 
 namespace DoMa.App.UI;
 
+/// <summary>Các thao tác nhanh cho menu "Tốc độ và lịch" ở đầu cửa sổ.</summary>
+internal sealed record QuickActions(
+    Func<int> SpeedLimit,
+    Action<int> SetSpeedLimit,
+    Func<int> StartLaterNow,
+    Func<Scheduling.AfterDone> AfterDone,
+    Action<Scheduling.AfterDone> SetAfterDone,
+    Func<string> Describe);
+
 public sealed class MainForm : Form
 {
     private const string AppTitle = "Download Manager (DoMa)";
@@ -59,6 +68,9 @@ public sealed class MainForm : Form
     private int _hoverRow = -1;
     private bool _dirty = true;
     private bool _exiting;
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal QuickActions? QuickActions { get; set; }
 
     public MainForm(DownloadManager manager, Func<string, Task> addLink, Action openSettings, Action requestExit, Action shutdown, ErrorLog log)
     {
@@ -199,6 +211,10 @@ public sealed class MainForm : Form
         add.Click += async (_, _) => await AddLinkAsync();
         _tips.SetToolTip(add, "Thêm đường dẫn tải mới (Ctrl+N)");
 
+        var speed = new ModernButton("Tốc độ và lịch", IconKind.Gauge, ButtonKind.Ghost) { IconOnly = true };
+        speed.Click += (_, _) => ShowQuickMenu(speed);
+        _tips.SetToolTip(speed, "Giới hạn tốc độ, tải theo lịch, việc làm khi tải xong");
+
         var settings = new ModernButton("Cài đặt", IconKind.Settings, ButtonKind.Ghost) { IconOnly = true };
         settings.Click += (_, _) => _openSettings();
         _tips.SetToolTip(settings, "Cài đặt");
@@ -212,12 +228,78 @@ public sealed class MainForm : Form
             Padding = new Padding(0, S(15), S(16), 0),
             BackColor = Theme.Surface,
         };
-        settings.Margin = new Padding(S(6), 0, 0, 0);
+        settings.Margin = new Padding(S(2), 0, 0, 0);
+        speed.Margin = new Padding(S(6), 0, 0, 0);
         add.Margin = new Padding(0);
         actions.Controls.Add(settings);
+        actions.Controls.Add(speed);
         actions.Controls.Add(add);
         header.Controls.Add(actions);
         return header;
+    }
+
+    private static readonly (int KBps, string Text)[] SpeedPresets =
+    [
+        (0, "Không giới hạn"),
+        (256, "256 KB/s"),
+        (512, "512 KB/s"),
+        (1024, "1 MB/s"),
+        (2048, "2 MB/s"),
+        (5120, "5 MB/s"),
+        (10240, "10 MB/s"),
+    ];
+
+    private void ShowQuickMenu(Control anchor)
+    {
+        if (QuickActions is not { } quick)
+            return;
+        var menu = ThemedRenderer.CreateMenu();
+        menu.ShowCheckMargin = true;
+        menu.ShowImageMargin = false;
+
+        AddHeader(menu, "Tốc độ tối đa");
+        var current = quick.SpeedLimit();
+        var preset = false;
+        foreach (var (kbps, text) in SpeedPresets)
+        {
+            var item = new ToolStripMenuItem(text) { Checked = current == kbps, Padding = new Padding(4, 4, 4, 4) };
+            preset |= current == kbps;
+            item.Click += (_, _) => { quick.SetSpeedLimit(kbps); RefreshStatus(); };
+            menu.Items.Add(item);
+        }
+        if (!preset)
+            menu.Items.Add(new ToolStripMenuItem($"Tuỳ chỉnh: {DownloadView.FormatSpeed(current * 1024.0)}") { Checked = true, Enabled = false });
+        menu.Items.Add(new ToolStripMenuItem("Đặt mức khác…", null, (_, _) => _openSettings()));
+
+        menu.Items.Add(new ToolStripSeparator());
+        AddHeader(menu, "Hàng chờ");
+        menu.Items.Add(new ToolStripMenuItem("Bắt đầu tải hàng “Chờ tải sau” ngay", null, (_, _) =>
+        {
+            if (quick.StartLaterNow() == 0)
+                MessageBox.Show(this, "Hàng “Chờ tải sau” đang trống.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }));
+        menu.Items.Add(new ToolStripMenuItem("Hẹn giờ tải tự động…", null, (_, _) => _openSettings()));
+
+        menu.Items.Add(new ToolStripSeparator());
+        AddHeader(menu, "Khi tải xong tất cả");
+        var after = quick.AfterDone();
+        foreach (var (value, text) in new[] { (Scheduling.AfterDone.Nothing, "Không làm gì"), (Scheduling.AfterDone.Sleep, "Cho máy ngủ"), (Scheduling.AfterDone.Shutdown, "Tắt máy") })
+        {
+            var item = new ToolStripMenuItem(text) { Checked = after == value };
+            item.Click += (_, _) => { quick.SetAfterDone(value); RefreshStatus(); };
+            menu.Items.Add(item);
+        }
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+        menu.Show(anchor, new Point(anchor.Width - menu.PreferredSize.Width, anchor.Height + S(4)));
+    }
+
+    private static void AddHeader(ContextMenuStrip menu, string text) =>
+        menu.Items.Add(new ToolStripLabel(text.ToUpperInvariant()) { Font = Theme.SmallBold, ForeColor = Theme.TextMuted, Tag = "header", Padding = new Padding(0, 6, 0, 2) });
+
+    private void RefreshStatus()
+    {
+        _dirty = true;
+        RefreshView();
     }
 
     // ───────────────────────── Thanh bên ─────────────────────────
@@ -732,6 +814,8 @@ public sealed class MainForm : Form
             ? (queued > 0 ? $"Không có tệp đang tải · {queued} đang chờ" : "Sẵn sàng")
             : $"{downloading.Count} tệp đang tải" + (totalSpeed > 0 ? $" · {DownloadView.FormatSpeed(totalSpeed)}" : "") + (queued > 0 ? $" · {queued} đang chờ" : "");
         _statusRight = $"Tổng cộng {items.Count} tệp · {items.Count(i => i.Status == DownloadStatus.Completed)} đã xong";
+        if (QuickActions?.Describe() is { Length: > 0 } extra)
+            _statusRight = extra + "   |   " + _statusRight;
         _statusBar.Invalidate();
         UpdateActions();
         _dirty = false;

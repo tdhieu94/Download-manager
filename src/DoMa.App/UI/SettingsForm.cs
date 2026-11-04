@@ -1,5 +1,6 @@
 using DoMa.App.UI.Controls;
 using DoMa.Core.Models;
+using DoMa.Core.Scheduling;
 using DoMa.Core.Storage;
 
 namespace DoMa.App.UI;
@@ -13,6 +14,10 @@ public sealed class SettingsForm : Form
     private readonly Dictionary<Category, InputBox> _extensions = Listed.ToDictionary(c => c, c => new InputBox(Theme.CategoryIcon(c)));
     private readonly NumericUpDown _connections = new() { Minimum = 1, Maximum = 32 };
     private readonly NumericUpDown _concurrent = new() { Minimum = 1, Maximum = 10 };
+    private readonly NumericUpDown _speed = new() { Minimum = 0, Maximum = 1_000_000, Increment = 256, ThousandsSeparator = true };
+    private readonly ToggleSwitch _schedule = new("Tải theo lịch hằng ngày", "Tự bắt đầu các tệp “Chờ tải sau” vào giờ hẹn, tự đưa về hàng chờ khi tới giờ dừng");
+    private readonly InputBox _scheduleStart = new(IconKind.Clock) { PlaceholderText = "23:00" };
+    private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = "Để trống = không dừng" };
     private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
     private readonly ToggleSwitch _notify = new("Thông báo khi tải xong", "Hiện thông báo ở góc màn hình khi một tệp tải xong");
     private readonly ToggleSwitch _updates = new("Tự động kiểm tra cập nhật", "Báo khi có phiên bản DoMa mới trên GitHub");
@@ -94,6 +99,28 @@ public sealed class SettingsForm : Form
         body.Controls.AddRange([connCaption, concCaption, _connections, _concurrent]);
         y += S(50);
 
+        Section("Tốc độ và lịch tải");
+        StyleNumber(_speed);
+        var speedCaption = DialogParts.FieldLabel("Tốc độ tối đa, KB/s (0 = không giới hạn)");
+        speedCaption.Location = new Point(x, y);
+        y += S(24);
+        _speed.SetBounds(x, y, half, S(30));
+        body.Controls.AddRange([speedCaption, _speed]);
+        y += S(46);
+        _schedule.SetBounds(x, y, w, S(46));
+        body.Controls.Add(_schedule);
+        y += S(52);
+        var startCaption = DialogParts.FieldLabel("Bắt đầu lúc (giờ:phút)");
+        var stopCaption = DialogParts.FieldLabel("Dừng lúc");
+        startCaption.Location = new Point(x, y);
+        stopCaption.Location = new Point(x + half + S(16), y);
+        y += S(24);
+        _scheduleStart.SetBounds(x, y, half, S(36));
+        _scheduleStop.SetBounds(x + half + S(16), y, half, S(36));
+        body.Controls.AddRange([startCaption, stopCaption, _scheduleStart, _scheduleStop]);
+        y += S(54);
+        _schedule.CheckedChanged += (_, _) => _scheduleStart.Enabled = _scheduleStop.Enabled = _schedule.Checked;
+
         Section("Hệ thống");
         _startup.SetBounds(x, y, w, S(46));
         y += S(50);
@@ -116,6 +143,11 @@ public sealed class SettingsForm : Form
         _startup.Checked = current.RunAtStartup;
         _notify.Checked = current.NotifyOnComplete;
         _updates.Checked = current.AutoCheckUpdates;
+        _speed.Value = Math.Clamp(current.SpeedLimitKBps, 0, 1_000_000);
+        _schedule.Checked = current.ScheduleEnabled;
+        _scheduleStart.Text = current.ScheduleStart;
+        _scheduleStop.Text = current.ScheduleStop ?? "";
+        _scheduleStart.Enabled = _scheduleStop.Enabled = _schedule.Checked;
 
         _browse.Click += (_, _) => Browse();
         _save.Click += (_, _) =>
@@ -125,6 +157,20 @@ public sealed class SettingsForm : Form
                 MessageBox.Show(this, "Thư mục gốc không hợp lệ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
                 _root.Box.Focus();
+                return;
+            }
+            if (_schedule.Checked && !ScheduleClock.TryParse(_scheduleStart.Text, out _))
+            {
+                MessageBox.Show(this, "Giờ bắt đầu không hợp lệ. Hãy nhập dạng 23:00.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                _scheduleStart.Box.Focus();
+                return;
+            }
+            if (_schedule.Checked && _scheduleStop.Text.Trim().Length > 0 && !ScheduleClock.TryParse(_scheduleStop.Text, out _))
+            {
+                MessageBox.Show(this, "Giờ dừng không hợp lệ. Hãy nhập dạng 07:00 hoặc để trống.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                _scheduleStop.Box.Focus();
             }
         };
     }
@@ -154,6 +200,10 @@ public sealed class SettingsForm : Form
             RunAtStartup = _startup.Checked,
             NotifyOnComplete = _notify.Checked,
             AutoCheckUpdates = _updates.Checked,
+            SpeedLimitKBps = (int)_speed.Value,
+            ScheduleEnabled = _schedule.Checked,
+            ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart,
+            ScheduleStop = _scheduleStop.Text.Trim().Length > 0 ? _scheduleStop.Text.Trim() : null,
         };
     }
 

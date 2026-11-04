@@ -25,6 +25,11 @@ public enum IconKind
     Search,
     Copy,
     Power,
+    Gauge,
+    Moon,
+    Sun,
+    Shield,
+    Hash,
 }
 
 /// <summary>Bộ icon dạng nét (line icon) vẽ bằng GDI+, sắc nét ở mọi mức DPI.</summary>
@@ -162,6 +167,47 @@ public static class Icons
             case IconKind.Copy:
                 Round(g, p, fill, new RectangleF(8.5f, 8.5f, 12, 12), 2, false);
                 g.DrawLines(p, [new PointF(15.5f, 8.5f), new PointF(15.5f, 4), new PointF(4, 4), new PointF(4, 15.5f), new PointF(8.5f, 15.5f)]);
+                break;
+            case IconKind.Gauge:
+                g.DrawArc(p, 3.5f, 5, 17, 17, 160, 220);
+                g.DrawLine(p, 12, 13.5f, 16.5f, 9);
+                g.FillEllipse(fill, 10.5f, 12, 3, 3);
+                break;
+            case IconKind.Moon:
+                using (var path = new GraphicsPath())
+                {
+                    // Trăng khuyết: cung nhỏ (tâm 16.5,7.5) rồi cung lớn (tâm 12,12, bán kính 9).
+                    path.AddArc(16.5f - 6.36f, 7.5f - 6.36f, 12.72f, 12.72f, 225, -180);
+                    path.AddArc(3, 3, 18, 18, 0, 270);
+                    path.CloseFigure();
+                    g.DrawPath(p, path);
+                }
+                break;
+            case IconKind.Sun:
+                g.DrawEllipse(p, 8, 8, 8, 8);
+                for (var i = 0; i < 8; i++)
+                {
+                    var a = i * Math.PI / 4;
+                    g.DrawLine(p, 12 + (float)Math.Cos(a) * 7, 12 + (float)Math.Sin(a) * 7, 12 + (float)Math.Cos(a) * 9.5f, 12 + (float)Math.Sin(a) * 9.5f);
+                }
+                break;
+            case IconKind.Shield:
+                using (var path = new GraphicsPath())
+                {
+                    path.AddLines([new PointF(12, 3), new PointF(19.5f, 6), new PointF(19.5f, 11)]);
+                    path.AddBezier(19.5f, 11, 19.5f, 16, 16, 19.5f, 12, 21);
+                    path.AddBezier(12, 21, 8, 19.5f, 4.5f, 16, 4.5f, 11);
+                    path.AddLines([new PointF(4.5f, 11), new PointF(4.5f, 6)]);
+                    path.CloseFigure();
+                    g.DrawPath(p, path);
+                }
+                g.DrawLines(p, [new PointF(9, 12), new PointF(11, 14), new PointF(15, 9.5f)]);
+                break;
+            case IconKind.Hash:
+                g.DrawLine(p, 5, 9, 20, 9);
+                g.DrawLine(p, 4, 15, 19, 15);
+                g.DrawLine(p, 10, 4, 8, 20);
+                g.DrawLine(p, 16, 4, 14, 20);
                 break;
             case IconKind.Power:
                 g.DrawArc(p, 4.5f, 5, 15, 15, -50, 280);

@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using DoMa.App.Capture;
 using DoMa.App.Ipc;
 using DoMa.App.UI;
+using DoMa.App.Scheduling;
 using DoMa.App.Updates;
 using DoMa.Core.Engine;
 using DoMa.Core.Files;
@@ -25,6 +26,8 @@ internal sealed class MainContext : ApplicationContext
     private readonly MainForm _form;
     private readonly TrayController _tray;
     private readonly UpdateService _updates;
+    private readonly BandwidthLimiter _limiter = new();
+    private readonly ScheduleService _schedule;
     private volatile Settings _settings;
     private bool _exited;
 
@@ -33,13 +36,14 @@ internal sealed class MainContext : ApplicationContext
         Directory.CreateDirectory(AppPaths.DataDir);
         Directory.CreateDirectory(AppPaths.StatesDir);
         _settings = _settingsStore.Load();
+        _limiter.LimitBytesPerSec = _settings.SpeedLimitKBps * 1024L;
 
         var ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
 
         var prober = new LinkProber(_http);
         _manager = new DownloadManager(
-            new SegmentedDownloadEngine(_http),
+            new SegmentedDownloadEngine(_http) { Limiter = _limiter },
             prober.ProbeAsync,
             new DownloadStore(AppPaths.DataDir),
             () => _settings,
@@ -59,6 +63,14 @@ internal sealed class MainContext : ApplicationContext
         _manager.Removed += id => _lastStatus.Remove(id);
 
         _form = new MainForm(_manager, AddLinkAsync, OpenSettings, Exit, ExitOnShutdown, _log);
+        _schedule = new ScheduleService(_manager, () => _settings, text => _tray?.Notify(text, ShowNow), ConfirmPower);
+        _form.QuickActions = new QuickActions(
+            () => _settings.SpeedLimitKBps,
+            SetSpeedLimit,
+            () => _schedule.StartLaterNow(),
+            () => _schedule.AfterDone,
+            _schedule.SetAfterDone,
+            _schedule.Describe);
         _tray = new TrayController(ShowNow, Exit, UI.MainForm.OpenFolder, () => _updates?.CheckNow());
         _updates = new UpdateService(_form, _tray, () => _settings, ExitForUpdate, _log);
         _ = _form.Handle;
@@ -149,8 +161,48 @@ internal sealed class MainContext : ApplicationContext
             _log.Write("settings", e, null);
             MessageBox.Show(_form, "Không lưu được cài đặt.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        ApplySettings(updated);
+    }
+
+    private void ApplySettings(Settings updated)
+    {
         _settings = updated;
+        _limiter.LimitBytesPerSec = updated.SpeedLimitKBps * 1024L;
         _manager.Reschedule();
+    }
+
+    private void SetSpeedLimit(int kbps)
+    {
+        var current = _settings;
+        var updated = new Settings
+        {
+            RootFolder = current.RootFolder,
+            Extensions = current.Extensions,
+            ConnectionsPerFile = current.ConnectionsPerFile,
+            MaxConcurrent = current.MaxConcurrent,
+            RunAtStartup = current.RunAtStartup,
+            NotifyOnComplete = current.NotifyOnComplete,
+            AutoCheckUpdates = current.AutoCheckUpdates,
+            SpeedLimitKBps = Math.Max(0, kbps),
+            ScheduleEnabled = current.ScheduleEnabled,
+            ScheduleStart = current.ScheduleStart,
+            ScheduleStop = current.ScheduleStop,
+        };
+        try
+        {
+            _settingsStore.Save(updated);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("settings", e, null);
+        }
+        ApplySettings(updated);
+    }
+
+    private bool ConfirmPower(AfterDone action)
+    {
+        using var dialog = new PowerCountdownForm(action);
+        return dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK;
     }
 
     private void OnChanged(DownloadItem item)
@@ -232,6 +284,7 @@ internal sealed class MainContext : ApplicationContext
                 Thread.Sleep(50);
         }
         _updates.Dispose();
+        _schedule.Dispose();
         _tray.Dispose();
         return true;
     }
