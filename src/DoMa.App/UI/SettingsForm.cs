@@ -20,6 +20,7 @@ public sealed class SettingsForm : Form
     private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = "Để trống = không dừng" };
     private static readonly (string Value, string Text)[] Appearances = [("System", "Theo Windows"), ("Light", "Sáng"), ("Dark", "Tối")];
     private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
+    private readonly ToggleSwitch _warn = new("Cảnh báo trước khi tải", "Báo khi tệp là chương trình, giả dạng đuôi khác hoặc tải từ nguồn đáng ngờ");
     private readonly ToggleSwitch _scan = new("Quét bằng Windows Defender", "Quét mỗi tệp vừa tải xong; báo ngay nếu phát hiện mối nguy");
     private readonly ToggleSwitch _extract = new("Tự giải nén tệp .zip", "Giải nén vào thư mục cùng tên, cạnh tệp vừa tải");
     private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
@@ -126,12 +127,14 @@ public sealed class SettingsForm : Form
         y += S(54);
         _schedule.CheckedChanged += (_, _) => _scheduleStart.Enabled = _scheduleStop.Enabled = _schedule.Checked;
 
-        Section("Sau khi tải xong");
+        Section("Bảo mật và sau khi tải");
+        _warn.SetBounds(x, y, w, S(46));
+        y += S(50);
         _scan.SetBounds(x, y, w, S(46));
         y += S(50);
         _extract.SetBounds(x, y, w, S(46));
         y += S(56);
-        body.Controls.AddRange([_scan, _extract]);
+        body.Controls.AddRange([_warn, _scan, _extract]);
 
         Section("Giao diện");
         var appearanceCaption = DialogParts.FieldLabel("Chế độ màu (áp dụng khi mở lại DoMa)");
@@ -168,6 +171,7 @@ public sealed class SettingsForm : Form
         _notify.Checked = current.NotifyOnComplete;
         _updates.Checked = current.AutoCheckUpdates;
         _appearance.SelectedIndex = Math.Max(0, Array.FindIndex(Appearances, a => string.Equals(a.Value, current.Appearance, StringComparison.OrdinalIgnoreCase)));
+        _warn.Checked = current.WarnBeforeDownload;
         _scan.Checked = current.ScanAfterDownload;
         _extract.Checked = current.AutoExtractZip;
         _speed.Value = Math.Clamp(current.SpeedLimitKBps, 0, 1_000_000);
@@ -228,6 +232,7 @@ public sealed class SettingsForm : Form
             NotifyOnComplete = _notify.Checked,
             AutoCheckUpdates = _updates.Checked,
             SpeedLimitKBps = (int)_speed.Value,
+            WarnBeforeDownload = _warn.Checked,
             ScanAfterDownload = _scan.Checked,
             AutoExtractZip = _extract.Checked,
             Appearance = Appearances[Math.Max(0, _appearance.SelectedIndex)].Value,

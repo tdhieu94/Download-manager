@@ -22,6 +22,9 @@ public class Settings
     /// <summary>Tốc độ tối đa cho tất cả lượt tải, KB/s (0 = không giới hạn).</summary>
     public int SpeedLimitKBps { get; set; }
 
+    /// <summary>Cảnh báo trong hộp "Tải xuống mới" khi tệp có dấu hiệu nguy hiểm.</summary>
+    public bool WarnBeforeDownload { get; set; } = true;
+
     /// <summary>Quét tệp vừa tải bằng Windows Defender.</summary>
     public bool ScanAfterDownload { get; set; }
 

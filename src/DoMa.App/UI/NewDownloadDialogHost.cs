@@ -5,7 +5,7 @@ using DialogResult = DoMa.App.Capture.DialogResult;
 
 namespace DoMa.App.UI;
 
-public sealed class NewDownloadDialogHost(SynchronizationContext uiContext) : IDownloadDialog
+public sealed class NewDownloadDialogHost(SynchronizationContext uiContext, Func<bool> warnAboutRisk) : IDownloadDialog
 {
     public Task<DialogResult> ShowAsync(DownloadRequest req, ProbeResult probe, string proposedPath, Category category)
     {
@@ -14,7 +14,7 @@ public sealed class NewDownloadDialogHost(SynchronizationContext uiContext) : ID
         {
             try
             {
-                done.TrySetResult(await new NewDownloadForm().ShowAsync(req, probe, proposedPath, category));
+                done.TrySetResult(await new NewDownloadForm(warnAboutRisk()).ShowAsync(req, probe, proposedPath, category));
             }
             catch (Exception e)
             {

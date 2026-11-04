@@ -53,7 +53,7 @@ internal sealed class MainContext : ApplicationContext
             ui);
         _coordinator = new CaptureCoordinator(
             prober.ProbeAsync,
-            new NewDownloadDialogHost(ui),
+            new NewDownloadDialogHost(ui, () => _settings.WarnBeforeDownload),
             _manager,
             () => new CategoryResolver(_settings.Extensions, _settings.RootFolder),
             Notify);

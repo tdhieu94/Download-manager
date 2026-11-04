@@ -2,6 +2,7 @@ using DoMa.App.Capture;
 using DoMa.App.UI.Controls;
 using DoMa.Core.Engine;
 using DoMa.Core.Models;
+using DoMa.Core.PostProcess;
 using DialogResult = DoMa.App.Capture.DialogResult;
 
 namespace DoMa.App.UI;
@@ -19,9 +20,13 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     private string _fileName = "";
     private string _sizeText = "";
     private Category _category = Category.Other;
+    private readonly bool _warn;
+    private readonly Panel _body;
+    private RiskReport _risk = RiskReport.Safe;
 
-    public NewDownloadForm()
+    public NewDownloadForm(bool warnAboutRisk = true)
     {
+        _warn = warnAboutRisk;
         Text = "Tải xuống mới";
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
@@ -31,7 +36,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         AcceptButton = _now;
         CancelButton = _cancel;
 
-        var body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
+        var body = _body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
         var linkLabel = DialogParts.FieldLabel("Đường dẫn");
         var pathLabel = DialogParts.FieldLabel("Lưu thành");
         var note = DialogParts.Hint("Thư mục tự đổi theo loại file: Tài liệu / Phần mềm / Nén / Khác");
@@ -113,9 +118,56 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         _sizeText = SizeFormatter.Format(probe.Size ?? req.SizeHint);
         _path.Text = proposedPath;
         _fileName = Path.GetFileName(proposedPath);
+        if (_warn)
+        {
+            var name = FirstNonBlank(probe.FileName, req.SuggestedFileName) ?? _fileName;
+            _risk = DownloadRisk.Assess(req.Url, probe.FinalUrl, name, probe.ContentType);
+            if (_risk.Level != RiskLevel.None)
+                AddRiskBanner();
+        }
         Show();
         Activate();
         return _result.Task;
+    }
+
+    private static string? FirstNonBlank(params string?[] values) => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    /// <summary>Khung cảnh báo dưới ô đường dẫn; cửa sổ cao thêm cho vừa.</summary>
+    private void AddRiskBanner()
+    {
+        var high = _risk.Level == RiskLevel.High;
+        var color = high ? Theme.Danger : Theme.Warning;
+        var title = high ? "Tệp này có dấu hiệu nguy hiểm" : "Hãy cẩn thận với tệp này";
+        var text = string.Join("\n", _risk.Reasons.Select(r => "• " + r));
+
+        var inner = _body.ClientSize.Width - S(48);
+        var textWidth = inner - S(56);
+        var flags = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+        var textHeight = TextRenderer.MeasureText(text, Theme.Small, new Size(textWidth, int.MaxValue), flags).Height;
+        var height = S(40) + textHeight + S(14);
+
+        var banner = new Panel { BackColor = Theme.Surface };
+        banner.SetBounds(S(24), S(186), inner, height);
+        banner.Paint += (_, e) =>
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var r = new RectangleF(0, 0, banner.Width - 1, banner.Height - 1);
+            Theme.FillRound(g, Theme.Tint(color, 0.88f), r, S(10));
+            Theme.DrawRound(g, Theme.Tint(color, 0.55f), r, S(10));
+            Icons.Draw(g, IconKind.Shield, new RectangleF(S(14), S(12), S(24), S(24)), color);
+            TextRenderer.DrawText(g, title, Theme.BodySemibold, new Rectangle(S(48), S(14), textWidth, S(22)), Theme.Readable(color), flags);
+            TextRenderer.DrawText(g, text, Theme.Small, new Rectangle(S(48), S(40), textWidth, textHeight), Theme.Text, flags);
+        };
+        _body.Controls.Add(banner);
+        Height += height + S(12);
+
+        if (high)
+        {
+            // Với tệp nguy hiểm, Enter không được tự tải: phải bấm hẳn vào nút.
+            _now.Text = "Vẫn tải";
+            AcceptButton = null;
+        }
     }
 
     private void Browse()
@@ -144,6 +196,15 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
             MessageBox.Show(this, "Đường dẫn lưu không hợp lệ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _path.Box.Focus();
             return;
+        }
+        if (choice != DialogChoice.Cancel && _risk.Level == RiskLevel.High)
+        {
+            var answer = MessageBox.Show(this,
+                "DoMa phát hiện tệp này có dấu hiệu nguy hiểm:\n\n" + string.Join("\n", _risk.Reasons.Select(r => "• " + r))
+                + "\n\nBạn vẫn muốn tải? Sau khi tải nên quét bằng Windows Defender trước khi mở.",
+                "Cảnh báo bảo mật", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (answer != System.Windows.Forms.DialogResult.Yes)
+                return;
         }
         _choice = choice;
         Close();
