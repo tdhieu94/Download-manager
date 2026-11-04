@@ -61,6 +61,20 @@ public static class DownloadView
     public static int Count(DownloadFilter filter, IEnumerable<DownloadItem> items) =>
         items.Count(i => Matches(filter, i));
 
+    /// <summary>
+    /// Dung lượng hiển thị. Khi máy chủ không báo trước (TotalBytes = null) thì hiện số đã tải;
+    /// tệp đã xong thì đó chính là dung lượng thật.
+    /// </summary>
+    public static string SizeText(DownloadItem item)
+    {
+        if (item.TotalBytes is long total)
+            return SizeFormatter.Format(total);
+        if (item.DownloadedBytes <= 0)
+            return SizeFormatter.Unknown;
+        var done = SizeFormatter.Format(item.DownloadedBytes);
+        return item.Status == DownloadStatus.Completed ? done : $"{done} / ?";
+    }
+
     public static string StatusText(DownloadItem item)
     {
         if (item.Threat is not null)

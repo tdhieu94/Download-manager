@@ -561,7 +561,7 @@ public sealed class MainForm : Form
             e.Value = e.ColumnIndex switch
             {
                 0 => Path.GetFileName(item.TargetPath),
-                1 => SizeFormatter.Format(item.TotalBytes),
+                1 => DownloadView.SizeText(item),
                 2 => new ProgressValue(
                     item.Status == DownloadStatus.Completed ? 100 : DownloadView.Percent(item.DownloadedBytes, item.TotalBytes),
                     Theme.StatusColor(item)),

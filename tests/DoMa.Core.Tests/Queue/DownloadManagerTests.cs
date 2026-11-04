@@ -146,6 +146,22 @@ public sealed class DownloadManagerTests : IDisposable
     }
 
     [Fact]
+    public void unknown_size_is_taken_from_file_on_completion()
+    {
+        _probe = _probe with { Size = null };
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+        File.WriteAllText(Target("a.bin"), "12345");
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Completed, Target("a.bin"), null));
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Completed);
+
+        var done = m.Items.Single();
+        Assert.Equal(5, done.TotalBytes);
+        Assert.Equal(5, done.DownloadedBytes);
+    }
+
+    [Fact]
     public void remove_with_delete_files_removes_part_and_target()
     {
         var m = Manager();

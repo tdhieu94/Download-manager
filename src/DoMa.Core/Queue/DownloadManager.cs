@@ -304,6 +304,19 @@ public class DownloadManager
         }
     }
 
+    private static long? ActualSize(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? info.Length : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     private void Persist()
     {
         _lastPersist = _time.GetUtcNow();
@@ -405,6 +418,8 @@ public class DownloadManager
                 case EngineOutcome.Completed:
                     item.Status = DownloadStatus.Completed;
                     item.TargetPath = result.FinalPath ?? item.TargetPath;
+                    // Máy chủ không báo dung lượng (vd. zip của GitHub): lấy kích thước thật của tệp đã tải.
+                    item.TotalBytes ??= ActualSize(item.TargetPath) ?? (item.DownloadedBytes > 0 ? item.DownloadedBytes : null);
                     item.DownloadedBytes = item.TotalBytes ?? item.DownloadedBytes;
                     item.CompletedAt = _time.GetUtcNow();
                     item.ErrorMessage = null;
