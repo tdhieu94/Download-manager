@@ -2,9 +2,15 @@ name: Release
 
 # Đẩy một tag dạng v1.2.3 lên GitHub để build, test, đóng gói và đăng bản phát hành.
 # Ứng dụng DoMa đã cài sẽ tự thấy bản mới qua GitHub Releases.
+# Hoặc chạy tay ở tab Actions → Release → Run workflow, nhập số phiên bản (ví dụ 1.0.1).
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Số phiên bản (ví dụ 1.0.1)"
+        required: true
 
 permissions:
   contents: write
@@ -19,9 +25,11 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          $v = "${{ github.ref_name }}".TrimStart('v')
-          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Tag phải có dạng v1.2.3 (nhận được ${{ github.ref_name }})" }
+          $raw = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.ref_name }}" }
+          $v = $raw.Trim().TrimStart('v')
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Phiên bản phải có dạng 1.2.3 (nhận được $raw)" }
           "version=$v" >> $env:GITHUB_OUTPUT
+          "tag=v$v" >> $env:GITHUB_OUTPUT
 
       - name: Ghi phiên bản vào manifest của tiện ích
         shell: pwsh
@@ -61,4 +69,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          gh release create "${{ github.ref_name }}" "artifacts/DoMa-Setup-$v.exe" "artifacts/DoMa-Setup-$v.exe.sha256" --title "DoMa $v" --generate-notes
+          gh release create "${{ steps.ver.outputs.tag }}" "artifacts/DoMa-Setup-$v.exe" "artifacts/DoMa-Setup-$v.exe.sha256" --target "${{ github.sha }}" --title "DoMa $v" --generate-notes

@@ -91,6 +91,8 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
+Hoặc vào tab **Actions → Release → Run workflow** và nhập số phiên bản (ví dụ `1.0.1`).
+
 Workflow [`release.yml`](.github/workflows/release.yml) sẽ chạy toàn bộ test, ghi số phiên bản vào ứng dụng và `manifest.json` của tiện ích, đóng gói `DoMa-Setup-X.Y.Z.exe` kèm file `.sha256`, rồi đăng lên Releases. Các máy đã cài DoMa sẽ tự thấy bản mới.
 
 ## Cấu trúc thư mục
