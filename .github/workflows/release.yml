@@ -97,4 +97,10 @@ jobs:
           $files = @("artifacts/DoMa-Setup-$v.exe", "artifacts/DoMa-Setup-$v.exe.sha256")
           $files += Get-ChildItem artifacts -Filter "DoMa-Firefox-*.xpi" | ForEach-Object { $_.FullName }
           if (Test-Path artifacts/firefox-updates.json) { $files += "artifacts/firefox-updates.json" }
-          gh release create "${{ steps.ver.outputs.tag }}" @files --target "${{ github.sha }}" --title "DoMa $v" --generate-notes
+          # Ghi chú song ngữ (tiếng Việt trước, tiếng Anh sau) lấy từ release-notes/<phiên bản>.md nếu có.
+          $notes = "release-notes/$v.md"
+          if (Test-Path $notes) {
+            gh release create "${{ steps.ver.outputs.tag }}" @files --target "${{ github.sha }}" --title "DoMa $v" --notes-file $notes
+          } else {
+            gh release create "${{ steps.ver.outputs.tag }}" @files --target "${{ github.sha }}" --title "DoMa $v" --generate-notes
+          }

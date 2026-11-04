@@ -58,10 +58,12 @@ public sealed class MainForm : Form
     private readonly Panel _updateBanner = new();
     private readonly ModernButton _updateNow = new("Cập nhật ngay", IconKind.Download, ButtonKind.Primary);
     private readonly ModernButton _updateLater = new("Để sau", IconKind.None, ButtonKind.Ghost);
+    private readonly ModernButton _updateNotes = new("Có gì mới", IconKind.Document, ButtonKind.Secondary);
     private string _updateTitle = "";
     private string _updateDetail = "";
     private Action? _onUpdate;
     private Action? _onUpdateLater;
+    private Action? _onUpdateNotes;
     private readonly ToolTip _tips = new();
     private readonly Bitmap _logo = Theme.AppIconSized(64).ToBitmap();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
@@ -442,13 +444,13 @@ public sealed class MainForm : Form
             Theme.DrawRound(g, Theme.AccentSoftStrong, box, S(10));
             var icon = S(20);
             Icons.Draw(g, IconKind.Download, new RectangleF(S(16), box.Y + (box.Height - icon) / 2, icon, icon), Theme.Accent);
-            var textW = _updateLater.Left - S(60);
+            var textW = (_updateNotes.Visible ? _updateNotes.Left : _updateLater.Left) - S(60);
             TextRenderer.DrawText(g, _updateTitle, Theme.BodySemibold, new Rectangle(S(48), (int)box.Y + S(9), textW, S(20)), Theme.AccentText,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, _updateDetail, Theme.Small, new Rectangle(S(48), (int)box.Y + S(29), textW, S(18)), Theme.TextSecondary,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         };
-        foreach (var b in new[] { _updateNow, _updateLater })
+        foreach (var b in new[] { _updateNow, _updateLater, _updateNotes })
         {
             b.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _updateBanner.Controls.Add(b);
@@ -456,6 +458,7 @@ public sealed class MainForm : Form
         _updateBanner.Resize += (_, _) => LayoutBanner();
         _updateBanner.BackColorChanged += (_, _) => LayoutBanner();
         _updateNow.Click += (_, _) => _onUpdate?.Invoke();
+        _updateNotes.Click += (_, _) => _onUpdateNotes?.Invoke();
         _updateLater.Click += (_, _) =>
         {
             _updateBanner.Visible = false;
@@ -469,12 +472,15 @@ public sealed class MainForm : Form
         var y = (_updateBanner.Height - S(12) - S(34)) / 2;
         _updateNow.Location = new Point(_updateBanner.Width - _updateNow.Width - S(12), y);
         _updateLater.Location = new Point(_updateNow.Left - _updateLater.Width - S(6), y);
+        _updateNotes.Location = new Point((_updateLater.Visible ? _updateLater.Left : _updateNow.Left) - _updateNotes.Width - S(6), y);
         _updateBanner.Invalidate();
     }
 
     /// <summary>Hiện dải thông báo có bản cập nhật mới phía trên danh sách tải.</summary>
-    public void ShowUpdate(string title, string detail, Action install, Action later)
+    public void ShowUpdate(string title, string detail, Action install, Action later, Action? showNotes = null)
     {
+        _onUpdateNotes = showNotes;
+        _updateNotes.Visible = showNotes is not null;
         _updateTitle = title;
         _updateDetail = detail;
         _onUpdate = install;
@@ -491,7 +497,7 @@ public sealed class MainForm : Form
         _updateDetail = detail;
         _updateNow.Enabled = !busy;
         _updateLater.Visible = !busy;
-        _updateBanner.Invalidate();
+        LayoutBanner();
     }
 
     private void BuildGrid()

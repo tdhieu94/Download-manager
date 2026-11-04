@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace DoMa.Core.Updates;
 
 /// <summary>Một bản phát hành trên GitHub có bộ cài DoMa đi kèm.</summary>
-public sealed record ReleaseInfo(Version Version, string Tag, string SetupName, string SetupUrl, string? Sha256, string? Sha256Url, string? PageUrl);
+public sealed record ReleaseInfo(Version Version, string Tag, string SetupName, string SetupUrl, string? Sha256, string? Sha256Url, string? PageUrl, string? Notes = null);
 
 public static class ReleaseParser
 {
@@ -63,7 +63,7 @@ public static class ReleaseParser
             if (string.Equals(Str(asset, "name"), setupName + ".sha256", StringComparison.OrdinalIgnoreCase) && Str(asset, "browser_download_url") is { } u && IsHttps(u))
                 shaUrl = u;
         }
-        return new ReleaseInfo(version, tag, setupName, setupUrl, digest, shaUrl, Str(root, "html_url"));
+        return new ReleaseInfo(version, tag, setupName, setupUrl, digest, shaUrl, Str(root, "html_url"), Str(root, "body"));
     }
 
     /// <summary>Lấy mã băm từ nội dung file .sha256 (định dạng "HASH" hoặc "HASH  tên-file").</summary>

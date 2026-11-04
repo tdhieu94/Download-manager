@@ -102,11 +102,22 @@ internal sealed class UpdateService : IDisposable
         _announced = release.Version;
         var title = $"Đã có DoMa {release.Version}";
         var detail = $"Bạn đang dùng bản {CurrentVersion}. Cập nhật mất chưa tới một phút, các tệp đang tải sẽ tự tải tiếp.";
-        _form.ShowUpdate(title, detail, () => _ = InstallAsync(release), () => _dismissed = release.Version);
+        _form.ShowUpdate(title, detail, () => _ = InstallAsync(release), () => _dismissed = release.Version, () => ShowNotes(release));
         if (manual || !_form.Visible || !_form.ContainsFocus)
-            _tray.Notify($"{title}. Bấm để xem.", ShowForm);
+            _tray.Notify($"{title}. Bấm để xem có gì mới.", () => ShowNotes(release));
         if (manual)
-            ShowForm();
+            ShowNotes(release);
+    }
+
+    /// <summary>Mở cửa sổ chính và hiện nội dung bản cập nhật; người dùng có thể cập nhật ngay từ đó.</summary>
+    private void ShowNotes(ReleaseInfo release)
+    {
+        if (_form.IsDisposed || _installing)
+            return;
+        ShowForm();
+        using var dialog = new UpdateNotesForm(release.Version.ToString(), CurrentVersion, ReleaseNotes.ToPlainText(release.Notes));
+        if (dialog.ShowDialog(_form) == DialogResult.OK)
+            _ = InstallAsync(release);
     }
 
     private void ShowForm()
