@@ -56,7 +56,7 @@ public sealed class ModernButton : Button
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        g.Clear(Parent?.BackColor ?? Theme.Surface);
+        PaintParentBackground(g);
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         var (back, border, fore) = Colors();
@@ -82,6 +82,32 @@ public sealed class ModernButton : Button
             Icons.Draw(g, Icon, new RectangleF(x, (Height - iconSize) / 2f, iconSize, iconSize), fore);
         TextRenderer.DrawText(g, Text, Font, new Rectangle(x + gap, 0, textSize.Width + 2, Height), fore,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+    }
+
+    /// <summary>
+    /// Vẽ lại đúng phần nền của control cha nằm sau nút (vd. khung bo màu của dải cập nhật),
+    /// thay vì tô cả ô bằng BackColor của cha, vốn để lộ một khung màu khác quanh nút.
+    /// </summary>
+    private void PaintParentBackground(Graphics g)
+    {
+        if (Parent is not { } parent)
+        {
+            g.Clear(Theme.Surface);
+            return;
+        }
+        g.Clear(parent.BackColor);
+        var state = g.Save();
+        try
+        {
+            g.TranslateTransform(-Left, -Top);
+            using var args = new PaintEventArgs(g, Bounds);
+            InvokePaintBackground(parent, args);
+            InvokePaint(parent, args);
+        }
+        finally
+        {
+            g.Restore(state);
+        }
     }
 
     private (Color Back, Color Border, Color Fore) Colors()
