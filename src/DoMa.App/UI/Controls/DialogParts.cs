@@ -14,6 +14,7 @@ public static class DialogParts
         form.FormBorderStyle = FormBorderStyle.FixedDialog;
         form.MaximizeBox = false;
         form.MinimizeBox = false;
+        Theme.StyleWindow(form);
         form.ClientSize = new Size(Theme.Scale(form, clientSize.Width), Theme.Scale(form, clientSize.Height));
     }
 

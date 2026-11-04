@@ -149,7 +149,7 @@ public sealed class NavList : Control
             if (selected && Focused && ShowFocusCues)
                 Theme.DrawRound(g, Theme.Tint(Theme.Accent, 0.4f), pill, S(8));
 
-            var fore = selected ? Theme.AccentPressed : Theme.TextSecondary;
+            var fore = selected ? Theme.AccentText : Theme.TextSecondary;
             var iconSize = S(18);
             Icons.Draw(g, item.Icon, new RectangleF(pill.X + S(12), pill.Y + (pill.Height - iconSize) / 2, iconSize, iconSize), selected ? Theme.Accent : Theme.TextMuted);
 

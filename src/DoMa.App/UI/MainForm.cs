@@ -90,6 +90,7 @@ public sealed class MainForm : Form
         ClientSize = new Size(S(1120), S(660));
         MinimumSize = new Size(S(1020), S(520));
         KeyPreview = true;
+        Theme.StyleWindow(this);
 
         // Thứ tự Add quyết định thứ tự Dock: thêm sau được neo trước.
         Controls.Add(BuildContent());
@@ -405,7 +406,7 @@ public sealed class MainForm : Form
             var icon = S(20);
             Icons.Draw(g, IconKind.Download, new RectangleF(S(16), box.Y + (box.Height - icon) / 2, icon, icon), Theme.Accent);
             var textW = _updateLater.Left - S(60);
-            TextRenderer.DrawText(g, _updateTitle, Theme.BodySemibold, new Rectangle(S(48), (int)box.Y + S(9), textW, S(20)), Theme.AccentPressed,
+            TextRenderer.DrawText(g, _updateTitle, Theme.BodySemibold, new Rectangle(S(48), (int)box.Y + S(9), textW, S(20)), Theme.AccentText,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, _updateDetail, Theme.Small, new Rectangle(S(48), (int)box.Y + S(29), textW, S(18)), Theme.TextSecondary,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
@@ -470,7 +471,8 @@ public sealed class MainForm : Form
         _grid.BackgroundColor = Theme.Surface;
         _grid.BorderStyle = BorderStyle.None;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        _grid.GridColor = Color.FromArgb(238, 242, 247);
+        _grid.GridColor = Theme.Divider;
+        Theme.StyleScrollbars(_grid);
         _grid.EnableHeadersVisualStyles = false;
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
@@ -634,7 +636,7 @@ public sealed class MainForm : Form
             var dot = S(7);
             using (var brush = new SolidBrush(color))
                 g.FillEllipse(brush, pill.X + S(9), pill.Y + (pill.Height - dot) / 2f, dot, dot);
-            var textColor = Color.FromArgb(Math.Max(0, color.R - 40), Math.Max(0, color.G - 40), Math.Max(0, color.B - 40));
+            var textColor = Theme.Readable(color);
             TextRenderer.DrawText(g, text, Theme.SmallBold, Rectangle.Round(new RectangleF(pill.X + S(21), pill.Y, pill.Width - S(27), pill.Height)), textColor, flags);
         }
 

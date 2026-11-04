@@ -22,6 +22,9 @@ public class Settings
     /// <summary>Tốc độ tối đa cho tất cả lượt tải, KB/s (0 = không giới hạn).</summary>
     public int SpeedLimitKBps { get; set; }
 
+    /// <summary>Giao diện: "System" (theo Windows), "Light" hoặc "Dark".</summary>
+    public string Appearance { get; set; } = "System";
+
     /// <summary>Hằng ngày tự bắt đầu các tệp "Chờ tải sau" vào giờ này (định dạng HH:mm).</summary>
     public bool ScheduleEnabled { get; set; }
     public string ScheduleStart { get; set; } = "23:00";

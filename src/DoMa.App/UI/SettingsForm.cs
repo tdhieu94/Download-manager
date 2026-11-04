@@ -18,6 +18,8 @@ public sealed class SettingsForm : Form
     private readonly ToggleSwitch _schedule = new("Tải theo lịch hằng ngày", "Tự bắt đầu các tệp “Chờ tải sau” vào giờ hẹn, tự đưa về hàng chờ khi tới giờ dừng");
     private readonly InputBox _scheduleStart = new(IconKind.Clock) { PlaceholderText = "23:00" };
     private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = "Để trống = không dừng" };
+    private static readonly (string Value, string Text)[] Appearances = [("System", "Theo Windows"), ("Light", "Sáng"), ("Dark", "Tối")];
+    private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
     private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
     private readonly ToggleSwitch _notify = new("Thông báo khi tải xong", "Hiện thông báo ở góc màn hình khi một tệp tải xong");
     private readonly ToggleSwitch _updates = new("Tự động kiểm tra cập nhật", "Báo khi có phiên bản DoMa mới trên GitHub");
@@ -35,6 +37,7 @@ public sealed class SettingsForm : Form
         CancelButton = _cancel;
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface, AutoScroll = true };
+        Theme.StyleScrollbars(body);
         var x = S(24);
         var w = ClientSize.Width - S(48);
         var y = S(4);
@@ -121,6 +124,18 @@ public sealed class SettingsForm : Form
         y += S(54);
         _schedule.CheckedChanged += (_, _) => _scheduleStart.Enabled = _scheduleStop.Enabled = _schedule.Checked;
 
+        Section("Giao diện");
+        var appearanceCaption = DialogParts.FieldLabel("Chế độ màu (áp dụng khi mở lại DoMa)");
+        appearanceCaption.Location = new Point(x, y);
+        y += S(24);
+        _appearance.Font = Theme.Body;
+        _appearance.BackColor = Theme.Surface;
+        _appearance.ForeColor = Theme.Text;
+        _appearance.Items.AddRange(Appearances.Select(a => (object)a.Text).ToArray());
+        _appearance.SetBounds(x, y, half, S(30));
+        body.Controls.AddRange([appearanceCaption, _appearance]);
+        y += S(50);
+
         Section("Hệ thống");
         _startup.SetBounds(x, y, w, S(46));
         y += S(50);
@@ -143,6 +158,7 @@ public sealed class SettingsForm : Form
         _startup.Checked = current.RunAtStartup;
         _notify.Checked = current.NotifyOnComplete;
         _updates.Checked = current.AutoCheckUpdates;
+        _appearance.SelectedIndex = Math.Max(0, Array.FindIndex(Appearances, a => string.Equals(a.Value, current.Appearance, StringComparison.OrdinalIgnoreCase)));
         _speed.Value = Math.Clamp(current.SpeedLimitKBps, 0, 1_000_000);
         _schedule.Checked = current.ScheduleEnabled;
         _scheduleStart.Text = current.ScheduleStart;
@@ -201,6 +217,7 @@ public sealed class SettingsForm : Form
             NotifyOnComplete = _notify.Checked,
             AutoCheckUpdates = _updates.Checked,
             SpeedLimitKBps = (int)_speed.Value,
+            Appearance = Appearances[Math.Max(0, _appearance.SelectedIndex)].Value,
             ScheduleEnabled = _schedule.Checked,
             ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart,
             ScheduleStop = _scheduleStop.Text.Trim().Length > 0 ? _scheduleStop.Text.Trim() : null,

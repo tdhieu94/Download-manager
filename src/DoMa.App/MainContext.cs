@@ -37,6 +37,7 @@ internal sealed class MainContext : ApplicationContext
         Directory.CreateDirectory(AppPaths.StatesDir);
         _settings = _settingsStore.Load();
         _limiter.LimitBytesPerSec = _settings.SpeedLimitKBps * 1024L;
+        Theme.Use(Enum.TryParse<ThemeMode>(_settings.Appearance, true, out var mode) ? mode : ThemeMode.System);
 
         var ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
@@ -161,7 +162,10 @@ internal sealed class MainContext : ApplicationContext
             _log.Write("settings", e, null);
             MessageBox.Show(_form, "Không lưu được cài đặt.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        var appearanceChanged = !string.Equals(updated.Appearance, _settings.Appearance, StringComparison.OrdinalIgnoreCase);
         ApplySettings(updated);
+        if (appearanceChanged)
+            MessageBox.Show(_form, "Chế độ màu mới sẽ được áp dụng khi bạn mở lại DoMa (Thoát ở khay hệ thống rồi mở lại).", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void ApplySettings(Settings updated)
@@ -184,6 +188,7 @@ internal sealed class MainContext : ApplicationContext
             NotifyOnComplete = current.NotifyOnComplete,
             AutoCheckUpdates = current.AutoCheckUpdates,
             SpeedLimitKBps = Math.Max(0, kbps),
+            Appearance = current.Appearance,
             ScheduleEnabled = current.ScheduleEnabled,
             ScheduleStart = current.ScheduleStart,
             ScheduleStop = current.ScheduleStop,
