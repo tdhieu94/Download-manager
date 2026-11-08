@@ -93,7 +93,7 @@ public sealed class MainForm : Form
         Font = Theme.Body;
         BackColor = Theme.Window;
         ForeColor = Theme.Text;
-        ClientSize = new Size(S(1120), S(660));
+        ClientSize = new Size(S(1200), S(660));
         MinimumSize = new Size(S(1020), S(520));
         KeyPreview = true;
         Theme.StyleWindow(this);
@@ -548,6 +548,7 @@ public sealed class MainForm : Form
         _grid.Columns.Add(new ProgressColumn { Name = "Progress", HeaderText = "TIẾN ĐỘ", FillWeight = 22 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Speed", HeaderText = "TỐC ĐỘ", FillWeight = 12, DefaultCellStyle = muted });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Eta", HeaderText = "CÒN LẠI", FillWeight = 12, DefaultCellStyle = muted });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time", HeaderText = "THỜI GIAN", FillWeight = 17, MinimumWidth = S(118), DefaultCellStyle = muted });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "TRẠNG THÁI", FillWeight = 22 });
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         foreach (DataGridViewColumn column in _grid.Columns)
@@ -567,6 +568,7 @@ public sealed class MainForm : Form
                     Theme.StatusColor(item)),
                 3 => DownloadView.FormatSpeed(_manager.SpeedBytesPerSec(item.Id)),
                 4 => DownloadView.FormatEta(_manager.Eta(item.Id)),
+                5 => DownloadView.TimeText(item),
                 _ => DownloadView.StatusText(item),
             };
         };
@@ -584,7 +586,8 @@ public sealed class MainForm : Form
             var item = _view[e.RowIndex];
             e.ToolTipText = e.ColumnIndex switch
             {
-                5 => DownloadView.StatusText(item),
+                5 => DownloadView.TimeTooltip(item),
+                6 => DownloadView.StatusText(item),
                 _ => "",
             };
         };
@@ -640,7 +643,7 @@ public sealed class MainForm : Form
             e.Handled = true;
             return;
         }
-        if (e.RowIndex >= _view.Count || e.ColumnIndex is not (0 or 5))
+        if (e.RowIndex >= _view.Count || e.ColumnIndex is not (0 or 6))
             return;
 
         var item = _view[e.RowIndex];

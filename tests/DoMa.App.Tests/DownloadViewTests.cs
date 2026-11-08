@@ -116,4 +116,15 @@ public class DownloadViewTests
         item.ErrorMessage = error;
         Assert.Equal(expected, DownloadView.StatusText(item));
     }
+
+    [Fact]
+    public void time_shows_completion_then_added()
+    {
+        var added = new DateTimeOffset(2026, 11, 8, 6, 0, 0, TimeSpan.Zero);
+        var item = new DownloadItem { Request = new DownloadRequest("https://h/a", null, null, null, null, null, null), AddedAt = added };
+        Assert.Equal(added.ToLocalTime().ToString("dd/MM/yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture), DownloadView.TimeText(item));
+        item.CompletedAt = added.AddMinutes(90);
+        Assert.Equal(item.CompletedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture), DownloadView.TimeText(item));
+        Assert.Contains("Mất 1 giờ 30 phút", DownloadView.TimeTooltip(item));
+    }
 }

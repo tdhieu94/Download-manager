@@ -75,6 +75,29 @@ public static class DownloadView
         return item.Status == DownloadStatus.Completed ? done : $"{done} / ?";
     }
 
+    /// <summary>Ngày giờ hiển thị: lúc tải xong nếu đã xong, ngược lại lúc thêm vào danh sách.</summary>
+    public static string TimeText(DownloadItem item) =>
+        (item.CompletedAt ?? item.AddedAt).ToLocalTime().ToString("dd/MM/yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+    public static string TimeTooltip(DownloadItem item)
+    {
+        static string F(DateTimeOffset t) => t.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        var text = $"Thêm lúc {F(item.AddedAt)}";
+        if (item.CompletedAt is { } done)
+        {
+            text += $"\nXong lúc {F(done)}";
+            var took = done - item.AddedAt;
+            if (took > TimeSpan.Zero)
+                text += $"\nMất {FormatDuration(took)}";
+        }
+        return text;
+    }
+
+    private static string FormatDuration(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours} giờ {t.Minutes} phút"
+        : t.TotalMinutes >= 1 ? $"{t.Minutes} phút {t.Seconds} giây"
+        : $"{Math.Max(1, t.Seconds)} giây";
+
     public static string StatusText(DownloadItem item)
     {
         if (item.Threat is not null)
