@@ -66,6 +66,10 @@ public sealed class YouTubeTests : IDisposable
     {
         Assert.Contains("xác minh", YtDlp.DescribeError(["ERROR: [youtube] x: Sign in to confirm you’re not a bot"]).Message);
         Assert.Contains("riêng tư", YtDlp.DescribeError(["ERROR: [youtube] x: Private video"]).Message);
+        var format = YtDlp.DescribeError(["ERROR: [youtube] x: Requested format is not available. Use --list-formats for a list of available formats"]).Message;
+        Assert.Contains("không cho lấy video", format);
+        Assert.Contains("yt-dlp: [youtube] x: Requested format", format);
+        Assert.Contains("bị chặn", YtDlp.DescribeError(["ERROR: [youtube] x: Video unavailable"]).Message);
         var net = YtDlp.DescribeError(["WARNING: retry", "ERROR: Unable to download webpage: timed out"]);
         Assert.True(net.Network);
         Assert.Equal("Không tải được video YouTube.", YtDlp.DescribeError([]).Message);
@@ -81,6 +85,9 @@ public sealed class YouTubeTests : IDisposable
         Assert.Equal("--", args[^2]);
         Assert.DoesNotContain("--cookies", args);
         Assert.Contains("--cookies", YtDlp.DownloadArguments(W, "x", null, "c.txt"));
+        var withDeno = YtDlp.InfoArguments(W, null, "/t/deno").ToList();
+        Assert.Equal("deno:/t/deno", withDeno[withDeno.IndexOf("--js-runtimes") + 1]);
+        Assert.DoesNotContain("--js-runtimes", YtDlp.InfoArguments(W, null));
     }
 
     [Fact]
@@ -107,8 +114,14 @@ public sealed class YouTubeTests : IDisposable
     {
         var zipPath = Path.Combine(_dir, "src.zip");
         using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
-        using (var w = new StreamWriter(zip.CreateEntry(OperatingSystem.IsWindows() ? "x/bin/ffmpeg.exe" : "x/bin/ffmpeg").Open()))
-            w.Write("ff");
+        {
+            var exe = OperatingSystem.IsWindows() ? ".exe" : "";
+            foreach (var name in new[] { "x/bin/ffmpeg" + exe, "deno" + exe })
+            {
+                using var w = new StreamWriter(zip.CreateEntry(name).Open());
+                w.Write(name);
+            }
+        }
         var zipBytes = File.ReadAllBytes(zipPath);
         var handler = new RedirectHandler(req => req.RequestUri!.Host == "github.com"
             ? Redirect("https://assets.example/" + Path.GetFileName(req.RequestUri.AbsolutePath))
@@ -123,7 +136,9 @@ public sealed class YouTubeTests : IDisposable
 
         Assert.True(File.Exists(tools.YtDlpPath));
         Assert.True(File.Exists(tools.FfmpegPath));
+        Assert.True(File.Exists(tools.DenoPath));
         Assert.True(tools.Ready);
+        Assert.Empty(tools.Missing);
         Assert.Empty(Directory.GetFiles(folder, "*.part*"));
         Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
     }

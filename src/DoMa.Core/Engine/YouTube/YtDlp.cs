@@ -22,15 +22,16 @@ public static class YtDlp
     /// <summary>Ưu tiên H.264 + AAC (mở được trên mọi máy) tới 1080p; không có thì lấy bản tốt nhất còn lại.</summary>
     public const string Format = "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b";
 
-    public static IReadOnlyList<string> InfoArguments(string url, string? cookieFile) =>
+    public static IReadOnlyList<string> InfoArguments(string url, string? cookieFile, string? denoPath = null) =>
     [
         "-J", "--no-playlist", "--no-warnings", "--encoding", "utf-8", "-f", Format,
+        .. Runtime(denoPath),
         .. Cookies(cookieFile),
         "--", url,
     ];
 
     /// <param name="outputStem">Đường dẫn tệp đích không có đuôi; yt-dlp tự thêm đuôi (.mp4).</param>
-    public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile) =>
+    public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null) =>
     [
         "--no-playlist", "--no-warnings", "--encoding", "utf-8", "--newline", "--progress", "--no-mtime",
         "-f", Format, "--merge-output-format", "mp4",
@@ -38,11 +39,15 @@ public static class YtDlp
         "-o", outputStem.Replace("%", "%%") + ".%(ext)s",
         "--progress-template", "download:" + ProgressPrefix + "%(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s",
         "--print", "after_move:" + FilePrefix + "%(filepath)s", "--no-simulate",
+        .. Runtime(denoPath),
         .. Cookies(cookieFile),
         "--", url,
     ];
 
     private static string[] Cookies(string? file) => file is null ? [] : ["--cookies", file];
+
+    /// <summary>YouTube cần chạy JavaScript để lấy link video; chỉ cho yt-dlp dùng deno đi kèm DoMa.</summary>
+    private static string[] Runtime(string? denoPath) => denoPath is null ? [] : ["--js-runtimes", "deno:" + denoPath];
 
     public static YtDlpProgress? ParseProgress(string line)
     {
@@ -111,14 +116,20 @@ public static class YtDlp
             return ("Video chỉ dành cho hội viên kênh, không tải được.", false);
         if (Has("live event") || Has("is live") || Has("Premieres"))
             return ("Video đang phát trực tiếp hoặc chưa công chiếu, hãy tải sau khi phát xong.", false);
-        if (Has("Video unavailable") || Has("not available"))
-            return ("Video không còn hoặc bị chặn ở khu vực của bạn.", false);
+        if (Has("Requested format is not available") || Has("Only images are available") || Has("JavaScript runtime") || Has("n challenge"))
+            return (WithRaw("YouTube không cho lấy video lúc này. DoMa sẽ cập nhật công cụ, hãy thử lại sau ít phút.", error), false);
+        if (Has("Video unavailable") || Has("video is not available") || Has("content isn't available") || Has("not available in your country"))
+            return (WithRaw("Video không còn hoặc bị chặn ở khu vực của bạn.", error), false);
         if (Has("timed out") || Has("Unable to download") || Has("getaddrinfo") || Has("Connection") || Has("Network"))
             return ("Mất kết nối khi tải video YouTube.", true);
         if (Has("DRM"))
             return ("Video có bảo vệ bản quyền (DRM), không tải được.", false);
         return (error.Length > 0 ? "YouTube: " + error : "Không tải được video YouTube.", false);
     }
+
+    /// <summary>Kèm nguyên văn lỗi của yt-dlp (rút gọn) để dễ tìm nguyên nhân.</summary>
+    private static string WithRaw(string message, string raw) =>
+        raw.Length == 0 ? message : $"{message} (yt-dlp: {(raw.Length > 160 ? raw[..160] + "…" : raw)})";
 
     /// <summary>Tệp cookie dạng Netscape cho yt-dlp, từ chuỗi Cookie của trình duyệt ("a=1; b=2").</summary>
     public static string NetscapeCookies(string cookieHeader, string domain = ".youtube.com")

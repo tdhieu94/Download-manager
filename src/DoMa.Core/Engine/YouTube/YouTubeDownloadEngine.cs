@@ -23,7 +23,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             var stem = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!, Path.GetFileNameWithoutExtension(job.TargetPath));
             var ffmpeg = File.Exists(tools.FfmpegPath) ? tools.Folder : null;
-            var args = YtDlp.DownloadArguments(url, stem, ffmpeg, cookieFile);
+            var args = YtDlp.DownloadArguments(url, stem, ffmpeg, cookieFile, Deno());
             return await RunProcessAsync(args, job, progress, pauseToken);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
@@ -54,7 +54,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         var cookieFile = WriteCookies(req.Cookies, Path.Combine(Path.GetTempPath(), $"doma-yt-{Guid.NewGuid():N}.txt"));
         try
         {
-            using var process = Start(YtDlp.InfoArguments(url, cookieFile));
+            using var process = Start(YtDlp.InfoArguments(url, cookieFile, Deno()));
             var stdout = process.StandardOutput.ReadToEndAsync(ct);
             var stderr = process.StandardError.ReadToEndAsync(ct);
             using var reg = ct.Register(() => Kill(process));
@@ -166,6 +166,8 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             return [];
         }
     }
+
+    private string? Deno() => File.Exists(tools.DenoPath) ? tools.DenoPath : null;
 
     private Process Start(IReadOnlyList<string> args)
     {

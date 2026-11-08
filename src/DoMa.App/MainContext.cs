@@ -167,12 +167,17 @@ internal sealed class MainContext : ApplicationContext
     private async Task<bool> InstallYouTubeToolsAsync()
     {
         var asked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var missing = _ytTools.Missing;
+        var lines = string.Join("\n", missing.Select(m => $"• {m.Name} (khoảng {m.SizeMb} MB): " + m.Name switch
+        {
+            "yt-dlp" => "đọc trang video YouTube",
+            "deno" => "chạy JavaScript, yt-dlp cần để lấy link video YouTube",
+            _ => "ghép hình và tiếng thành một tệp .mp4",
+        }));
         _ui.Post(_ =>
         {
-            const string text = "Để tải video YouTube, DoMa cần thêm hai công cụ miễn phí, mã nguồn mở:\n\n"
-                + "• yt-dlp (khoảng 18 MB): đọc trang video YouTube\n"
-                + "• ffmpeg (khoảng 100 MB): ghép hình và tiếng thành một tệp .mp4\n\n"
-                + "DoMa sẽ tải chúng từ GitHub một lần duy nhất. Tải ngay?";
+            var text = "Để tải video YouTube, DoMa cần thêm công cụ miễn phí, mã nguồn mở:\n\n"
+                + lines + "\n\nDoMa sẽ tải chúng từ GitHub một lần duy nhất. Tải ngay?";
             const string caption = "Tải video YouTube";
             // Cửa sổ DoMa đang ẩn dưới khay: hiện hộp hỏi nổi lên trên trình duyệt.
             var answer = _form.Visible
@@ -183,7 +188,7 @@ internal sealed class MainContext : ApplicationContext
         }, null);
         if (!await asked.Task)
             return false;
-        _tray.Toast("Đang chuẩn bị tải YouTube", "Đang tải yt-dlp và ffmpeg (một lần duy nhất, có thể mất vài phút)…", ToolTipIcon.None, null, 10);
+        _tray.Toast("Đang chuẩn bị tải YouTube", $"Đang tải {string.Join(", ", missing.Select(m => m.Name))} (một lần duy nhất, có thể mất vài phút)…", ToolTipIcon.None, null, 10);
         try
         {
             _ytInstallPercent = 0;
