@@ -19,6 +19,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     private DialogChoice _choice = DialogChoice.Cancel;
     private string _fileName = "";
     private string _sizeText = "";
+    private long? _size;
     private Category _category = Category.Other;
     private readonly bool _warn;
     private readonly Panel _body;
@@ -116,6 +117,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         _link.Text = req.Url;
         _category = category;
         _sizeText = SizeFormatter.Format(probe.Size ?? req.SizeHint);
+        _size = probe.Size ?? req.SizeHint;
         _path.Text = proposedPath;
         _fileName = Path.GetFileName(proposedPath);
         if (_warn)
@@ -196,6 +198,15 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
             MessageBox.Show(this, "Đường dẫn lưu không hợp lệ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _path.Box.Focus();
             return;
+        }
+        if (choice == DialogChoice.DownloadNow && Core.Files.DiskSpace.Shortage(_path.Text.Trim(), _size) is { } shortage)
+        {
+            var answer = MessageBox.Show(this,
+                shortage + ".\n\nHãy bấm “Chọn…” để lưu sang ổ khác, hoặc dọn bớt ổ rồi tải. Vẫn thêm vào danh sách “Chờ tải sau”?",
+                "Không đủ chỗ trống", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (answer != System.Windows.Forms.DialogResult.Yes)
+                return;
+            choice = DialogChoice.Later;
         }
         if (choice != DialogChoice.Cancel && _risk.Level == RiskLevel.High)
         {

@@ -459,8 +459,16 @@ public class DownloadManager
                     refreshed = run.Item.LinkRefreshed;
                     run.Item.LinkRefreshed = false;
                 }
-                var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe, refreshed);
-                result = await _engine.RunAsync(job, run, run.Cts.Token);
+                var isStream = Engine.Hls.HlsPlaylist.Looks(probe.FinalUrl ?? run.Item.Request.Url, probe.ContentType ?? run.Item.Request.Mime);
+                if (!isStream && SpaceShortage(run.Item, probe.Size) is { } shortage)
+                {
+                    result = new EngineResult(EngineOutcome.Failed, null, shortage);
+                }
+                else
+                {
+                    var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe, refreshed);
+                    result = await _engine.RunAsync(job, run, run.Cts.Token);
+                }
             }
         }
         catch (OperationCanceledException) when (run.Cts.IsCancellationRequested)
@@ -472,6 +480,27 @@ public class DownloadManager
             result = new EngineResult(EngineOutcome.Failed, null, ex.Message, ex is HttpRequestException);
         }
         Finish(run, result);
+    }
+
+    /// <summary>Đo chỗ trống trên ổ (thay được khi kiểm thử).</summary>
+    public Func<string, long?> FreeSpace { get; init; } = DiskSpace.FreeBytes;
+
+    /// <summary>Báo thiếu chỗ nếu ổ không đủ cho phần còn phải tải (tệp .part đã được cấp đủ chỗ thì coi như đủ).</summary>
+    private string? SpaceShortage(DownloadItem item, long? size)
+    {
+        if (size is not > 0)
+            return null;
+        long reserved = 0;
+        try
+        {
+            var part = new FileInfo(item.TargetPath + ".part");
+            if (part.Exists)
+                reserved = part.Length;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+        }
+        return DiskSpace.Shortage(item.TargetPath, size.Value - reserved, FreeSpace);
     }
 
     private static string ProbeMessage(ProbeResult probe) => probe.Failure switch

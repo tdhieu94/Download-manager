@@ -23,8 +23,13 @@ public sealed class DownloadManagerTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, true);
 
+    private long? _free;
+
     private DownloadManager Manager(string? dataDir = null) =>
-        new(_engine, (_, _) => Task.FromResult(_probe), new DownloadStore(dataDir ?? _dir), () => _settings, _statesDir, null, _time);
+        new(_engine, (_, _) => Task.FromResult(_probe), new DownloadStore(dataDir ?? _dir), () => _settings, _statesDir, null, _time)
+        {
+            FreeSpace = _ => _free,
+        };
 
     private static DownloadRequest Req(string url, string? cookies = null) => new(url, null, null, null, null, cookies, null);
 
@@ -415,6 +420,35 @@ public sealed class DownloadManagerTests : IDisposable
         m.Resume([item.Id]);
         WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
         Assert.False(m.Items.Single().CanResume);
+    }
+
+    [Fact]
+    public void fails_early_when_disk_is_too_small()
+    {
+        _probe = _probe with { Size = 100L << 20 };
+        _free = 50L << 20;
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed);
+        Assert.Contains("không đủ chỗ", m.Items.Single().ErrorMessage);
+        Assert.Equal(0, _engine.Runs);
+        Assert.False(m.Items.Single().NetworkError);
+    }
+
+    [Fact]
+    public void resume_counts_space_already_reserved_by_part_file()
+    {
+        _probe = _probe with { Size = 100L << 20 };
+        _free = 50L << 20;
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), false);
+        using (var part = File.Create(item.TargetPath + ".part"))
+            part.SetLength(80L << 20);
+
+        m.Resume([item.Id]);
+
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
     }
 
     [Fact]
