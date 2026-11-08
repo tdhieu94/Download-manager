@@ -215,10 +215,12 @@ public class DownloadManager
         lock (_gate)
         {
             var item = _items.FirstOrDefault(i => i.Id == id);
-            if (item is null || item.Status == DownloadStatus.Completed || _running.ContainsKey(id))
+            if (item is null || item.Status == DownloadStatus.Completed || _running.ContainsKey(id) || _restarting.Contains(id))
                 return false;
             item.Request = request;
             item.ErrorMessage = null;
+            item.NetworkError = false;
+            item.AutoRetries = 0;
             item.LinkRefreshed = true;
             item.Status = DownloadStatus.Queued;
             Persist();

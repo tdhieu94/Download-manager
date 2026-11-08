@@ -36,11 +36,16 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             units.AddRange(playlist.Segments.Select(s => (s.Uri, (HlsSegment?)s)));
 
             var state = HlsState.Load(job.StatePath);
-            // Link mới (link cũ hết hạn) thường đổi địa chỉ danh sách phát: chỉ cần số đoạn khớp là tải tiếp được.
-            if (state is null || (state.Playlist != mediaUrl.AbsoluteUri && !job.LinkRefreshed) || state.Units != units.Count
+            // Link mới (link cũ hết hạn) thường đổi địa chỉ danh sách phát: tải tiếp được nếu cùng số đoạn
+            // và cùng tên tệp đoạn đầu (tránh nối nhầm sang chất lượng khác của video).
+            var firstName = FirstName(units);
+            var sameStream = state is not null && (state.Playlist == mediaUrl.AbsoluteUri
+                || (job.LinkRefreshed && (state.First is null || state.First == firstName)));
+            if (state is null || !sameStream || state.Units != units.Count
                 || !File.Exists(partPath) || new FileInfo(partPath).Length < state.Bytes)
                 state = new HlsState { Playlist = mediaUrl.AbsoluteUri, Units = units.Count };
             state.Playlist = mediaUrl.AbsoluteUri;
+            state.First = firstName;
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             var outcome = EngineOutcome.Completed;
@@ -173,6 +178,9 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
         }
     }
 
+    private static string? FirstName(List<(Uri Uri, HlsSegment? Segment)> units) =>
+        units.Count > 0 ? Path.GetFileName(units[0].Uri.AbsolutePath) : null;
+
     /// <summary>IV mặc định của HLS: số thứ tự đoạn, 16 byte big-endian.</summary>
     public static byte[] SequenceIv(long sequence)
     {
@@ -230,6 +238,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
     {
         public string Playlist { get; set; } = "";
         public int Units { get; set; }
+        public string? First { get; set; }
         public int Done { get; set; }
         public long Bytes { get; set; }
 

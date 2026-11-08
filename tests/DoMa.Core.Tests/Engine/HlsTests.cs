@@ -109,6 +109,42 @@ public sealed class HlsTests : IDisposable
     }
 
     [Fact]
+    public async Task refreshed_link_resumes_same_stream_only()
+    {
+        string Playlist(string prefix) =>
+            $"#EXTM3U\n#EXTINF:1,\n{prefix}a.ts\n#EXTINF:1,\n{prefix}b.ts\n#EXTINF:1,\n{prefix}c.ts\n#EXT-X-ENDLIST\n";
+        var files = new Dictionary<string, byte[]>
+        {
+            ["/old.m3u8"] = Encoding.UTF8.GetBytes(Playlist("")),
+            ["/a.ts"] = Encoding.ASCII.GetBytes("AA"),
+            ["/b.ts"] = Encoding.ASCII.GetBytes("BB"),
+        };
+        var handler = new MapHandler(files);
+        using var http = new HttpClient(handler);
+        var engine = new HlsDownloadEngine(http, (_, _) => Task.CompletedTask);
+        var target = Path.Combine(_dir, "v.ts");
+        DownloadJob Job(string url, bool refreshed) => new(new DownloadRequest(url, null, null, null, null, null, null), target,
+            Path.Combine(_dir, "s.json"), 1,
+            new ProbeResult(true, url, 10, true, null, null, null, "application/vnd.apple.mpegurl", ProbeFailure.None, 200), refreshed);
+
+        var first = await engine.RunAsync(Job("https://h.example/old.m3u8", false), new Progress<EngineProgress>(), CancellationToken.None);
+        Assert.Equal(EngineOutcome.Failed, first.Outcome);
+
+        // Link mới: danh sách phát và các đoạn nằm ở chỗ khác (mã thời hạn mới), cùng tên đoạn.
+        files["/new.m3u8"] = Encoding.UTF8.GetBytes(Playlist("v2/"));
+        files["/v2/a.ts"] = Encoding.ASCII.GetBytes("AA");
+        files["/v2/b.ts"] = Encoding.ASCII.GetBytes("BB");
+        files["/v2/c.ts"] = Encoding.ASCII.GetBytes("CC");
+        handler.Requests.Clear();
+
+        var second = await engine.RunAsync(Job("https://h.example/new.m3u8", true), new Progress<EngineProgress>(), CancellationToken.None);
+
+        Assert.Equal(EngineOutcome.Completed, second.Outcome);
+        Assert.Equal("AABBCC", File.ReadAllText(target));
+        Assert.DoesNotContain("/v2/a.ts", handler.Requests);
+    }
+
+    [Fact]
     public async Task live_stream_is_refused()
     {
         var files = new Dictionary<string, byte[]> { ["/live.m3u8"] = Encoding.UTF8.GetBytes("#EXTM3U\n#EXTINF:1,\na.ts\n") };
@@ -123,8 +159,12 @@ public sealed class HlsTests : IDisposable
 
     private sealed class MapHandler(Dictionary<string, byte[]> files) : HttpMessageHandler
     {
+        public List<string> Requests { get; } = [];
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            lock (Requests)
+                Requests.Add(request.RequestUri!.AbsolutePath);
             var resp = files.TryGetValue(request.RequestUri!.AbsolutePath, out var body)
                 ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
                 : new HttpResponseMessage(HttpStatusCode.NotFound);
