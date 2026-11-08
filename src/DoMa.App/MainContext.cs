@@ -27,6 +27,7 @@ internal sealed class MainContext : ApplicationContext
     private readonly MainForm _form;
     private readonly TrayController _tray;
     private readonly UpdateService _updates;
+    private readonly Capture.ClipboardWatcher _clipboard;
     private readonly BandwidthLimiter _limiter = new();
     private readonly ScheduleService _schedule;
     private volatile Settings _settings;
@@ -76,6 +77,10 @@ internal sealed class MainContext : ApplicationContext
             _schedule.Describe);
         _tray = new TrayController(ShowNow, Exit, UI.MainForm.OpenFolder, () => _updates?.CheckNow());
         _updates = new UpdateService(_form, _tray, () => _settings, ExitForUpdate, _log);
+        _clipboard = new Capture.ClipboardWatcher(
+            () => _settings.WatchClipboard,
+            () => _settings.Extensions.Values.SelectMany(v => v),
+            url => _tray.Toast("Bắt được link vừa copy", $"{LinkName(url)} · Bấm để tải bằng DoMa", ToolTipIcon.None, () => _ = AddLinkAsync(url), 10));
         _ = _form.Handle;
         if (!hidden)
             _form.Show();
@@ -136,6 +141,11 @@ internal sealed class MainContext : ApplicationContext
 
     private void Notify(string message) =>
         PostToForm(() => MessageBox.Show(_form, message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information));
+
+    private static string LinkName(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath)) is { Length: > 0 } name
+            ? name
+            : url;
 
     private async Task AddLinkAsync(string url)
     {
@@ -353,6 +363,7 @@ internal sealed class MainContext : ApplicationContext
                 Thread.Sleep(50);
         }
         _updates.Dispose();
+        _clipboard.Dispose();
         _schedule.Dispose();
         _tray.Dispose();
         return true;

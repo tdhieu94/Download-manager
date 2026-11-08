@@ -22,6 +22,9 @@ public class Settings
     /// <summary>Tốc độ tối đa cho tất cả lượt tải, KB/s (0 = không giới hạn).</summary>
     public int SpeedLimitKBps { get; set; }
 
+    /// <summary>Khi copy một link tải (vd. .zip, .exe, .mp4), hiện thông báo đề nghị tải bằng DoMa.</summary>
+    public bool WatchClipboard { get; set; } = true;
+
     /// <summary>Cảnh báo trong hộp "Tải xuống mới" khi tệp có dấu hiệu nguy hiểm.</summary>
     public bool WarnBeforeDownload { get; set; } = true;
 

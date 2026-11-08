@@ -1,4 +1,7 @@
-import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, shouldReload } from "./capture.js";
+import {
+  shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, shouldReload,
+  manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply,
+} from "./capture.js";
 
 const HOST_NAME = "com.doma.host";
 const PONG_TIMEOUT_MS = 6000;
@@ -34,8 +37,30 @@ const pending = new PendingTable({
   store: pendingStore,
   setTimer: (fn, ms) => setTimeout(fn, ms),
   clearTimer: (handle) => clearTimeout(handle),
-  onExpire: (id) => resumeDownload(Number(id)),
+  onExpire: (id) => (isManualId(id) ? fallbackManual(id) : resumeDownload(Number(id))),
 });
+
+// Lượt bắt thủ công đang chờ DoMa trả lời: id → link, để trình duyệt tự tải nếu DoMa không nhận.
+const manual = new Map();
+// Link trình duyệt tải thay cho DoMa: không bắt lại lần nữa.
+const bypass = new Set();
+let manualCounter = 0;
+
+async function browserDownload(url) {
+  bypass.add(url);
+  setTimeout(() => bypass.delete(url), 30000);
+  try {
+    await chrome.downloads.download({ url });
+  } catch {
+    bypass.delete(url);
+  }
+}
+
+function fallbackManual(id) {
+  const url = manual.get(id);
+  manual.delete(id);
+  if (url) browserDownload(url);
+}
 
 async function resumeDownload(id) {
   try {
@@ -44,7 +69,7 @@ async function resumeDownload(id) {
   }
 }
 
-const restored = resumeStored(pendingStore, (id) => resumeDownload(Number(id))).catch(() => {});
+const restored = resumeStored(pendingStore, (id) => (isManualId(id) ? undefined : resumeDownload(Number(id)))).catch(() => {});
 
 async function isEnabled() {
   const { enabled } = await chrome.storage.local.get({ enabled: true });
@@ -102,6 +127,18 @@ function connect() {
 async function handleHostMessage(msg) {
   const id = String(msg?.id ?? "");
   const type = msg?.type;
+  if (isManualId(id)) {
+    const action = decideManualReply(type);
+    if (action === "markAsking") {
+      pending.markAsking(id);
+      return;
+    }
+    pending.take(id);
+    if (action === "fallback") fallbackManual(id);
+    else manual.delete(id);
+    maybeReload();
+    return;
+  }
   if (type === "dang_hoi") {
     pending.markAsking(id);
     return;
@@ -189,9 +226,59 @@ async function captureInner(item) {
 }
 
 chrome.downloads.onCreated.addListener(async (item) => {
+  if (bypass.has(item.url) || bypass.has(item.finalUrl)) return;
   const enabled = await isEnabled();
   if (!shouldCapture(item, { enabled })) return;
   await capture(item);
+});
+
+// ── Menu chuột phải: "Tải bằng DoMa" cho mọi link, ảnh, video, âm thanh ──
+const MENU_ID = "doma-download";
+
+function createMenu() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_ID,
+      title: "Tải bằng DoMa",
+      contexts: ["link", "image", "video", "audio"],
+    });
+  });
+}
+
+chrome.runtime.onInstalled.addListener(createMenu);
+chrome.runtime.onStartup.addListener(createMenu);
+
+async function captureManual(url, pageUrl) {
+  capturing++;
+  const id = manualId(`${Date.now()}-${++manualCounter}`);
+  try {
+    let activePort;
+    try {
+      activePort = await connect();
+    } catch {
+      // DoMa chưa chạy: để trình duyệt tự tải như bình thường.
+      await browserDownload(url);
+      return;
+    }
+    const cookies = await buildCookies(url);
+    manual.set(id, url);
+    pending.add(id);
+    try {
+      activePort.postMessage(toManualCaptureMessage(id, url, pageUrl, cookies, navigator.userAgent));
+    } catch {
+      pending.take(id);
+      fallbackManual(id);
+    }
+  } finally {
+    capturing--;
+    maybeReload();
+  }
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== MENU_ID) return;
+  const url = contextUrl(info);
+  if (url) captureManual(url, info.pageUrl || tab?.url);
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

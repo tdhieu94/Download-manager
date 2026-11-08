@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload } from "../capture.js";
+import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply } from "../capture.js";
 
 const base = { id: 1, url: "https://example.com/a.zip", state: "in_progress", incognito: false };
 const on = { enabled: true };
@@ -182,4 +182,29 @@ test("reloads once when DoMa is newer", () => {
   assert.equal(shouldReload("1.0.0", "1.0.0", null), false);
   assert.equal(shouldReload("0.9.0", "1.0.0", null), false);
   assert.equal(shouldReload(undefined, "1.0.0", null), false);
+});
+
+test("manual ids are distinguishable from browser download ids", () => {
+  assert.equal(isManualId(manualId(7)), true);
+  assert.equal(isManualId("42"), false);
+});
+
+test("context menu prefers link, then media source, http(s) only", () => {
+  assert.equal(contextUrl({ linkUrl: "https://a/x.zip", srcUrl: "https://a/i.png" }), "https://a/x.zip");
+  assert.equal(contextUrl({ srcUrl: "https://a/v.mp4" }), "https://a/v.mp4");
+  assert.equal(contextUrl({ linkUrl: "javascript:void(0)", srcUrl: "blob:https://a/1" }), null);
+});
+
+test("manual capture message carries page as referrer", () => {
+  const msg = toManualCaptureMessage("m1", "https://a/x.zip", "https://a/page", "k=v", "UA");
+  assert.equal(msg.type, "bat");
+  assert.equal(msg.referrer, "https://a/page");
+  assert.equal(toManualCaptureMessage("m1", "https://a/x", "chrome://newtab", "", "UA").referrer, null);
+});
+
+test("manual give-back falls back to browser download", () => {
+  assert.equal(decideManualReply("tra_lai"), "fallback");
+  assert.equal(decideManualReply("dang_hoi"), "markAsking");
+  assert.equal(decideManualReply("nhan"), "done");
+  assert.equal(decideManualReply("huy"), "done");
 });

@@ -895,6 +895,7 @@ public sealed class MainForm : Form
     {
         try
         {
+            DoMa.App.Capture.ClipboardWatcher.IgnoreOnce(item.Request.Url);
             Clipboard.SetText(item.Request.Url);
         }
         catch (ExternalException)

@@ -109,6 +109,49 @@ function basename(path) {
   return text.slice(Math.max(text.lastIndexOf("\\"), text.lastIndexOf("/")) + 1);
 }
 
+// ── Bắt link bằng menu chuột phải (link, ảnh, video, âm thanh) ──
+// Lượt bắt này không có lượt tải nào của trình duyệt đi kèm, nên dùng id dạng "m<số>" để phân biệt.
+const MANUAL_PREFIX = "m";
+
+export function manualId(counter) {
+  return `${MANUAL_PREFIX}${counter}`;
+}
+
+export function isManualId(id) {
+  return String(id ?? "").startsWith(MANUAL_PREFIX);
+}
+
+/** Link mà menu chuột phải được bấm vào: ưu tiên link, rồi tới nguồn ảnh/video/âm thanh. */
+export function contextUrl(info) {
+  for (const candidate of [info?.linkUrl, info?.srcUrl]) {
+    const url = String(candidate ?? "");
+    if (/^https?:\/\//i.test(url)) return url;
+  }
+  return null;
+}
+
+export function toManualCaptureMessage(id, url, pageUrl, cookies, userAgent) {
+  return {
+    type: "bat",
+    id,
+    url,
+    finalUrl: null,
+    referrer: /^https?:\/\//i.test(String(pageUrl ?? "")) ? pageUrl : null,
+    filename: "",
+    mime: null,
+    fileSize: null,
+    cookies,
+    userAgent,
+  };
+}
+
+/** DoMa trả lời một lượt bắt thủ công: "fallback" = để trình duyệt tự tải link đó. */
+export function decideManualReply(type) {
+  if (type === "dang_hoi") return "markAsking";
+  if (type === "tra_lai") return "fallback";
+  return "done";
+}
+
 export function toCaptureMessage(item, cookies, userAgent) {
   return {
     type: "bat",

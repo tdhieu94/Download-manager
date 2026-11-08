@@ -122,11 +122,13 @@ public sealed class ToastForm : Form
         {
             ToolTipIcon.Error => Theme.Danger,
             ToolTipIcon.Warning => Theme.Warning,
+            ToolTipIcon.None => Theme.Accent,
             _ => Theme.Success,
         };
         var icon = _kind switch
         {
             ToolTipIcon.Error or ToolTipIcon.Warning => IconKind.Shield,
+            ToolTipIcon.None => IconKind.Download,
             _ => IconKind.Check,
         };
         using (var bar = new SolidBrush(color))

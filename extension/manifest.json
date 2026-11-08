@@ -6,6 +6,7 @@
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjKAqKrbxVXn+ASaUoFAoIO1x1YG5O5NREp6lBS5sI7ICbxeq7a4LKShqOL5V8ZG5hqIrPkqG8YCmBXQds5kxbiUW9U+d/dbMJ/jJc8cjBqy1ivMJYb/JPnP2M6CMwo7h6roki0LKKl+Nvay/dCt9zj/TxixORfGms/QpmEPyUtSFOnAcfa0vYpPzTN6nQCkPUmE2QxsMBOZR7ho8GBXdunNMlqwnqT9HDrZO6HKRnKd9dg+E4YCrVWmsYWKLZ2GJi+PfaUGDJOvFPMdMZffO4/rgH7eUij6x7CNiOcDetSZHxtTLQCNA0VliVSR1c49nqlmbUsIwrkhw+pQvXHU1VQIDAQAB",
   "permissions": [
     "downloads",
+    "contextMenus",
     "cookies",
     "nativeMessaging",
     "storage"

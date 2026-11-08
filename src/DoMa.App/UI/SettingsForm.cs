@@ -24,6 +24,7 @@ public sealed class SettingsForm : Form
     private readonly ToggleSwitch _scan = new("Quét bằng Windows Defender", "Quét mỗi tệp vừa tải xong; báo ngay nếu phát hiện mối nguy");
     private readonly ToggleSwitch _extract = new("Tự giải nén tệp .zip", "Giải nén vào thư mục cùng tên, cạnh tệp vừa tải");
     private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
+    private readonly ToggleSwitch _clipboard = new("Bắt link khi copy", "Copy một link tải (.zip, .exe, .mp4…) là DoMa đề nghị tải giúp");
     private readonly ToggleSwitch _notify = new("Thông báo khi tải xong", "Hiện thông báo ở góc màn hình khi một tệp tải xong");
     private readonly ToggleSwitch _updates = new("Tự động kiểm tra cập nhật", "Báo khi có phiên bản DoMa mới trên GitHub");
     private readonly ModernButton _save = new("Lưu", IconKind.Check, ButtonKind.Primary) { DialogResult = DialogResult.OK };
@@ -154,8 +155,10 @@ public sealed class SettingsForm : Form
         _notify.SetBounds(x, y, w, S(46));
         y += S(50);
         _updates.SetBounds(x, y, w, S(46));
+        y += S(50);
+        _clipboard.SetBounds(x, y, w, S(46));
         y += S(52);
-        body.Controls.AddRange([_startup, _notify, _updates]);
+        body.Controls.AddRange([_startup, _notify, _updates, _clipboard]);
         body.AutoScrollMinSize = new Size(0, y);
 
         Controls.Add(body);
@@ -169,6 +172,7 @@ public sealed class SettingsForm : Form
         _concurrent.Value = Math.Clamp(current.MaxConcurrent, 1, 10);
         _startup.Checked = current.RunAtStartup;
         _notify.Checked = current.NotifyOnComplete;
+        _clipboard.Checked = current.WatchClipboard;
         _updates.Checked = current.AutoCheckUpdates;
         _appearance.SelectedIndex = Math.Max(0, Array.FindIndex(Appearances, a => string.Equals(a.Value, current.Appearance, StringComparison.OrdinalIgnoreCase)));
         _warn.Checked = current.WarnBeforeDownload;
@@ -230,6 +234,7 @@ public sealed class SettingsForm : Form
             MaxConcurrent = (int)_concurrent.Value,
             RunAtStartup = _startup.Checked,
             NotifyOnComplete = _notify.Checked,
+            WatchClipboard = _clipboard.Checked,
             AutoCheckUpdates = _updates.Checked,
             SpeedLimitKBps = (int)_speed.Value,
             WarnBeforeDownload = _warn.Checked,
