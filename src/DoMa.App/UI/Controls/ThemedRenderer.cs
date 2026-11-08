@@ -48,10 +48,18 @@ public sealed class ThemedRenderer() : ToolStripProfessionalRenderer(new Palette
             base.OnRenderItemText(e);
             return;
         }
-        var r = new Rectangle(e.TextRectangle.X, 0, e.Item.Width - e.TextRectangle.X - 4, e.Item.Height);
         var color = e.Item.Enabled ? e.TextColor : Theme.TextMuted;
         var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
             | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+        if (e.Item is ToolStripMenuItem { ShortcutKeyDisplayString: { Length: > 0 } shortcut } && e.Text == shortcut)
+        {
+            // Phím tắt: chữ mờ, căn phải trong ô của nó.
+            var sr = new Rectangle(e.TextRectangle.X, 0, e.TextRectangle.Width, e.Item.Height);
+            TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont ?? e.Item.Font, sr, Theme.TextMuted,
+                (flags & ~TextFormatFlags.Left) | TextFormatFlags.Right);
+            return;
+        }
+        var r = new Rectangle(e.TextRectangle.X, 0, e.Item.Width - e.TextRectangle.X - 4, e.Item.Height);
         TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont ?? e.Item.Font, r, color, flags);
     }
 

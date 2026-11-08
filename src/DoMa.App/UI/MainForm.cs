@@ -182,6 +182,25 @@ public sealed class MainForm : Form
             case Keys.Delete when _grid.Focused:
                 RemoveSelected();
                 return true;
+            case Keys.Space when _grid.Focused:
+                TogglePauseSelected();
+                return true;
+            case Keys.F2 when _grid.Focused:
+                ForFirst(i =>
+                {
+                    if (i.Status != DownloadStatus.Downloading)
+                        RenameItem(i);
+                });
+                return true;
+            case Keys.Control | Keys.C when _grid.Focused:
+                ForFirst(CopyLink);
+                return true;
+            case Keys.Control | Keys.O when _grid.Focused:
+                ForFirst(i => OpenFolder(i.TargetPath));
+                return true;
+            case Keys.Control | Keys.A when _grid.Focused:
+                _grid.SelectAll();
+                return true;
             case Keys.Enter when _grid.Focused:
                 ForFirst(i =>
                 {
@@ -194,6 +213,18 @@ public sealed class MainForm : Form
                 return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    /// <summary>Space: nếu trong các tệp chọn có tệp đang tải/chờ thì tạm dừng chúng, không thì tải tiếp.</summary>
+    private void TogglePauseSelected()
+    {
+        var ids = SelectedIds();
+        var selected = _manager.Items.Where(i => ids.Contains(i.Id)).ToList();
+        var active = selected.Where(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued).Select(i => i.Id).ToList();
+        if (active.Count > 0)
+            _manager.Pause(active);
+        else
+            _manager.Resume(selected.Where(i => i.Status != DownloadStatus.Completed).Select(i => i.Id));
     }
 
     /// <summary>Mở tệp đã tải; tệp bị phát hiện mã độc thì phải xác nhận lại.</summary>
@@ -443,8 +474,8 @@ public sealed class MainForm : Form
         _resume.Click += (_, _) => _manager.Resume(SelectedIds());
         _pause.Click += (_, _) => _manager.Pause(SelectedIds());
         _remove.Click += (_, _) => RemoveSelected();
-        _tips.SetToolTip(_resume, "Tiếp tục tải các tệp đã chọn");
-        _tips.SetToolTip(_pause, "Tạm dừng các tệp đã chọn");
+        _tips.SetToolTip(_resume, "Tiếp tục tải các tệp đã chọn (Space)");
+        _tips.SetToolTip(_pause, "Tạm dừng các tệp đã chọn (Space)");
         _tips.SetToolTip(_remove, "Xoá các tệp đã chọn (Delete)");
         foreach (var b in new[] { _resume, _pause, _remove })
             b.Margin = new Padding(0, 0, S(6), 0);
@@ -746,11 +777,12 @@ public sealed class MainForm : Form
     private ContextMenuStrip BuildContextMenu()
     {
         var menu = ThemedRenderer.CreateMenu();
-        ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(OpenItem));
-        ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath)));
+        ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(OpenItem)).ShortcutKeyDisplayString = "Enter";
+        ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath))).ShortcutKeyDisplayString = "Ctrl+O";
         var source = ThemedRenderer.Item(menu, "Mở trang nguồn", IconKind.Link, (_, _) => ForFirst(OpenSource));
-        ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink));
+        ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink)).ShortcutKeyDisplayString = "Ctrl+C";
         var rename = ThemedRenderer.Item(menu, "Đổi tên…", IconKind.File, (_, _) => ForFirst(RenameItem));
+        rename.ShortcutKeyDisplayString = "F2";
         menu.Items.Add(new ToolStripSeparator());
         var hash = ThemedRenderer.Item(menu, "Kiểm tra mã băm…", IconKind.Hash, (_, _) => ForFirst(i =>
         {
@@ -776,7 +808,7 @@ public sealed class MainForm : Form
                     _manager.Restart(id);
             });
         });
-        ThemedRenderer.Item(menu, "Xoá", IconKind.Trash, (_, _) => RemoveSelected(), Theme.Danger);
+        ThemedRenderer.Item(menu, "Xoá", IconKind.Trash, (_, _) => RemoveSelected(), Theme.Danger).ShortcutKeyDisplayString = "Delete";
         menu.Opening += (_, e) =>
         {
             e.Cancel = _grid.SelectedRows.Count == 0;
