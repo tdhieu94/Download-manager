@@ -287,7 +287,7 @@ async function captureManual(url, pageUrl) {
     }
     const cookies = await buildCookies(url);
     // Link trang video (YouTube, TikTok…): trình duyệt không tải thay được (chỉ ra trang web), nên không có đường lui.
-    manual.set(id, isPageMedia(url) ? null : url);
+    manual.set(id, isPageMedia(url) || /^magnet:/i.test(url) ? null : url);
     pending.add(id);
     try {
       activePort.postMessage(toManualCaptureMessage(id, url, pageUrl, cookies, navigator.userAgent));

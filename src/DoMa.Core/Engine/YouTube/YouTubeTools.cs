@@ -13,6 +13,10 @@ public sealed class YouTubeTools(string folder, HttpClient http)
     public const string DenoUrl = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip";
     public const string FfmpegUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
 
+    /// <summary>aria2c để tải torrent; chỉ tải về khi người dùng tải torrent lần đầu.</summary>
+    public const string Aria2Url = "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip";
+    public const int Aria2SizeMb = 3;
+
     /// <summary>yt-dlp cần cập nhật thường xuyên vì YouTube hay đổi cách phát video.</summary>
     public static readonly TimeSpan RefreshAfter = TimeSpan.FromDays(7);
 
@@ -26,6 +30,45 @@ public sealed class YouTubeTools(string folder, HttpClient http)
     public string FfmpegPath => Path.Combine(folder, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg");
 
     public string DenoPath => Path.Combine(folder, OperatingSystem.IsWindows() ? "deno.exe" : "deno");
+
+    public string Aria2Path => Path.Combine(folder, OperatingSystem.IsWindows() ? "aria2c.exe" : "aria2c");
+
+    public bool HasAria2 => File.Exists(Aria2Path);
+
+    /// <summary>Tải aria2c (công cụ tải torrent).</summary>
+    public async Task InstallAria2Async(IProgress<int>? progress, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            if (HasAria2)
+                return;
+            Directory.CreateDirectory(folder);
+            var zip = Path.Combine(folder, "aria2.zip.part");
+            try
+            {
+                await DownloadAsync(Aria2Url, zip, p => progress?.Report(p), ct);
+                ExtractAria2(zip, folder);
+            }
+            finally
+            {
+                TryDelete(zip);
+            }
+            progress?.Report(100);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public static void ExtractAria2(string zipPath, string folder)
+    {
+        using var zip = ZipFile.OpenRead(zipPath);
+        var entry = zip.Entries.FirstOrDefault(e => e.Name.Equals("aria2c.exe", StringComparison.OrdinalIgnoreCase) || e.Name == "aria2c")
+            ?? throw new InvalidDataException("Không tìm thấy aria2c trong gói tải về.");
+        entry.ExtractToFile(Path.Combine(folder, entry.Name), true);
+    }
 
     public bool Ready => Missing.Count == 0;
 

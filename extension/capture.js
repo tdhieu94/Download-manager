@@ -125,7 +125,7 @@ export function isManualId(id) {
 export function contextUrl(info) {
   for (const candidate of [info?.linkUrl, info?.srcUrl]) {
     const url = String(candidate ?? "");
-    if (/^https?:\/\//i.test(url)) return url;
+    if (/^https?:\/\//i.test(url) || /^magnet:\?/i.test(url)) return url;
   }
   return null;
 }

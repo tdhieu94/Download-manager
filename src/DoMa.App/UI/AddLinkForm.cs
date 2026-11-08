@@ -57,7 +57,7 @@ public sealed class AddLinkForm : Form
                 return null;
             // Copy nhiều link (mỗi dòng một link): gộp lại cách nhau bởi dấu cách vì ô nhập chỉ có một dòng.
             var links = Clipboard.GetText().Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
-                .Where(t => Uri.TryCreate(t, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+                .Where(t => (Uri.TryCreate(t, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") || Core.Engine.Torrent.TorrentLink.IsMagnet(t))
                 .Distinct()
                 .Take(Core.Files.BatchLinks.MaxLinks)
                 .ToList();

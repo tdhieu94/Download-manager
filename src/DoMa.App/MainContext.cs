@@ -59,14 +59,17 @@ internal sealed class MainContext : ApplicationContext
             new Core.Engine.Hls.MediaAwareEngine(
                 new SegmentedDownloadEngine(_http) { Limiter = _limiter },
                 new Core.Engine.Hls.HlsDownloadEngine(_http) { Limiter = _limiter },
-                _ytEngine),
-            (req, ct) => Core.Engine.YouTube.MediaLink.IsVideo(req.Url) ? Task.FromResult(MediaReady(req)) : prober.ProbeAsync(req, ct),
+                _ytEngine,
+                new Core.Engine.Torrent.TorrentDownloadEngine(_ytTools) { SpeedLimit = () => _limiter.LimitBytesPerSec }),
+            (req, ct) => Core.Engine.Torrent.TorrentLink.IsTorrent(req.Url, req.Mime) ? Task.FromResult(TorrentReady(req))
+                : Core.Engine.YouTube.MediaLink.IsVideo(req.Url) ? Task.FromResult(MediaReady(req)) : prober.ProbeAsync(req, ct),
             new DownloadStore(AppPaths.DataDir),
             () => _settings,
             AppPaths.StatesDir,
             ui);
         _coordinator = new CaptureCoordinator(
-            (req, ct) => Core.Engine.YouTube.MediaLink.IsVideo(req.Url) ? ProbeMediaAsync(req, ct) : prober.ProbeAsync(req, ct),
+            (req, ct) => Core.Engine.Torrent.TorrentLink.IsTorrent(req.Url, req.Mime) ? ProbeTorrentAsync(req)
+                : Core.Engine.YouTube.MediaLink.IsVideo(req.Url) ? ProbeMediaAsync(req, ct) : prober.ProbeAsync(req, ct),
             new NewDownloadDialogHost(ui, () => _settings.WarnBeforeDownload, () => LastMedia, RememberMedia),
             _manager,
             () => new CategoryResolver(_settings.Extensions, _settings.RootFolder),
@@ -141,6 +144,57 @@ internal sealed class MainContext : ApplicationContext
     private static ProbeResult MediaFailed() => new(false, null, null, false, null, null, null, null, ProbeFailure.Other, null);
 
     private MediaOptions LastMedia => new(_settings.MediaQuality, _settings.MediaSubtitles);
+
+    // ───────────── Torrent (qua aria2c) ─────────────
+
+    private static ProbeResult TorrentReady(DownloadRequest req) =>
+        new(true, req.Url, null, true, null, null, Core.Engine.Torrent.TorrentLink.DisplayName(req.Url), "application/x-bittorrent", ProbeFailure.None, 200);
+
+    private Task<bool>? _aria2Install;
+
+    /// <summary>Link torrent: lần đầu thì hỏi rồi cài aria2c (khoảng 3 MB).</summary>
+    private async Task<ProbeResult> ProbeTorrentAsync(DownloadRequest req)
+    {
+        if (!_ytTools.HasAria2)
+        {
+            Task<bool> install;
+            lock (_refresh)
+                install = _aria2Install is { IsCompleted: false } running ? running : _aria2Install = InstallAria2Async();
+            if (!await install)
+                return MediaFailed();
+        }
+        return TorrentReady(req);
+    }
+
+    private async Task<bool> InstallAria2Async()
+    {
+        var asked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ui.Post(_ =>
+        {
+            var text = "Để tải torrent, DoMa cần thêm công cụ miễn phí, mã nguồn mở aria2 "
+                + $"(khoảng {Core.Engine.YouTube.YouTubeTools.Aria2SizeMb} MB).\n\nDoMa sẽ tải nó từ GitHub một lần duy nhất. Tải ngay?\n\n"
+                + "Lưu ý: DoMa không chia sẻ lại (seed) sau khi tải xong. Chỉ tải nội dung bạn có quyền tải.";
+            const string caption = "Tải torrent";
+            var answer = _form.Visible
+                ? MessageBox.Show(_form, text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                : MessageBox.Show(text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+            asked.TrySetResult(answer == System.Windows.Forms.DialogResult.Yes);
+        }, null);
+        if (!await asked.Task)
+            return false;
+        try
+        {
+            await _ytTools.InstallAria2Async(null, CancellationToken.None);
+            return true;
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or TaskCanceledException)
+        {
+            _log.Write("aria2", e, null);
+            _tray.Toast("Không tải được công cụ torrent", $"Kiểm tra kết nối mạng rồi thử lại. ({e.Message})", ToolTipIcon.Error, null, 10);
+            return false;
+        }
+    }
 
     /// <summary>Nhớ chất lượng vừa chọn để lần sau chọn sẵn.</summary>
     private void RememberMedia(MediaOptions options)
@@ -572,12 +626,20 @@ internal sealed class MainContext : ApplicationContext
     }
 
     /// <summary>Dán/kéo-thả nhiều link vào cửa sổ chính.</summary>
-    private Task AddManyAsync(IReadOnlyList<string> urls)
+    private async Task AddManyAsync(IReadOnlyList<string> urls)
     {
+        // Link magnet không nằm trong hộp "Tải nhiều link" (chỉ cho http/https): mở hộp tải riêng cho từng link.
+        foreach (var magnet in urls.Where(Core.Engine.Torrent.TorrentLink.IsMagnet))
+            await AddLinkAsync(magnet);
+        urls = urls.Where(u => !Core.Engine.Torrent.TorrentLink.IsMagnet(u)).ToList();
+        if (urls.Count == 0)
+            return;
         if (urls.Count == 1)
-            return AddLinkAsync(urls[0]);
+        {
+            await AddLinkAsync(urls[0]);
+            return;
+        }
         ChooseAndAdd(urls.Select(u => (u, (string?)null)), "", null, null, null);
-        return Task.CompletedTask;
     }
 
     private static string LinkName(string url) =>

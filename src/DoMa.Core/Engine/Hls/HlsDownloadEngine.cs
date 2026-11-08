@@ -268,10 +268,12 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
 /// Chọn engine theo loại link: video YouTube dùng engine YouTube (yt-dlp), luồng HLS dùng HlsDownloadEngine,
 /// còn lại dùng engine tải nhiều luồng.
 /// </summary>
-public sealed class MediaAwareEngine(IDownloadEngine files, IDownloadEngine hls, IDownloadEngine? youtube = null) : IDownloadEngine
+public sealed class MediaAwareEngine(IDownloadEngine files, IDownloadEngine hls, IDownloadEngine? youtube = null, IDownloadEngine? torrent = null) : IDownloadEngine
 {
     public Task<EngineResult> RunAsync(DownloadJob job, IProgress<EngineProgress> progress, CancellationToken pauseToken)
     {
+        if (torrent is not null && Torrent.TorrentLink.IsTorrent(job.Request.Url, job.Request.Mime))
+            return torrent.RunAsync(job, progress, pauseToken);
         if (youtube is not null && YouTube.MediaLink.IsVideo(job.Request.Url))
             return youtube.RunAsync(job, progress, pauseToken);
         return HlsPlaylist.Looks(job.Probe.FinalUrl ?? job.Request.Url, job.Probe.ContentType ?? job.Request.Mime)
@@ -281,5 +283,5 @@ public sealed class MediaAwareEngine(IDownloadEngine files, IDownloadEngine hls,
 
     /// <summary>Video dạng luồng (HLS, YouTube): chưa biết chính xác dung lượng, tải tiếp được theo cách riêng.</summary>
     public static bool IsStream(string url, string? contentType) =>
-        YouTube.MediaLink.IsVideo(url) || HlsPlaylist.Looks(url, contentType);
+        YouTube.MediaLink.IsVideo(url) || HlsPlaylist.Looks(url, contentType) || Torrent.TorrentLink.IsTorrent(url, contentType);
 }

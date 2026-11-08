@@ -192,6 +192,7 @@ test("manual ids are distinguishable from browser download ids", () => {
 test("context menu prefers link, then media source, http(s) only", () => {
   assert.equal(contextUrl({ linkUrl: "https://a/x.zip", srcUrl: "https://a/i.png" }), "https://a/x.zip");
   assert.equal(contextUrl({ srcUrl: "https://a/v.mp4" }), "https://a/v.mp4");
+  assert.equal(contextUrl({ linkUrl: "magnet:?xt=urn:btih:abc" }), "magnet:?xt=urn:btih:abc");
   assert.equal(contextUrl({ linkUrl: "javascript:void(0)", srcUrl: "blob:https://a/1" }), null);
 });
 
