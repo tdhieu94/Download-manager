@@ -134,6 +134,28 @@ public class DownloadManager
         }
     }
 
+    /// <summary>
+    /// Thay link tải (link cũ hết hạn) cho một tệp chưa xong rồi tải tiếp. Phần đã tải được giữ lại
+    /// nếu link mới trỏ tới tệp cùng dung lượng.
+    /// </summary>
+    public bool ReplaceLink(Guid id, DownloadRequest request)
+    {
+        lock (_gate)
+        {
+            var item = _items.FirstOrDefault(i => i.Id == id);
+            if (item is null || item.Status == DownloadStatus.Completed || _running.ContainsKey(id))
+                return false;
+            item.Request = request;
+            item.ErrorMessage = null;
+            item.LinkRefreshed = true;
+            item.Status = DownloadStatus.Queued;
+            Persist();
+            Raise(Changed, item);
+            Pump();
+            return true;
+        }
+    }
+
     /// <summary>Tệp đã tải được đổi sang tệp khác (vd. .ts → .mp4): cập nhật đường dẫn trong danh sách.</summary>
     public void Relocate(Guid id, string newPath)
     {
@@ -398,7 +420,13 @@ public class DownloadManager
                         run.Item.CanResume = probe.SupportsRange && probe.Size is not null;
                     }
                 }
-                var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe);
+                bool refreshed;
+                lock (_gate)
+                {
+                    refreshed = run.Item.LinkRefreshed;
+                    run.Item.LinkRefreshed = false;
+                }
+                var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe, refreshed);
                 result = await _engine.RunAsync(job, run, run.Cts.Token);
             }
         }
@@ -415,7 +443,7 @@ public class DownloadManager
 
     private static string ProbeMessage(ProbeResult probe) => probe.Failure switch
     {
-        ProbeFailure.Expired => "Link đã hết hạn, hãy bấm tải lại trên trang web",
+        ProbeFailure.Expired => "Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp",
         ProbeFailure.NotFound => "Không tìm thấy tệp trên máy chủ",
         ProbeFailure.HtmlInsteadOfFile => "Máy chủ trả về trang web thay vì tệp",
         ProbeFailure.Network => "Không kết nối được tới máy chủ",

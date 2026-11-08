@@ -28,6 +28,12 @@ public class CaptureCoordinator(
     private readonly object _gate = new();
     private readonly HashSet<string> _reserved = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Hỏi xem link vừa bắt có phải link mới cho một tệp đang chờ làm mới link không (tên tệp hoặc dung lượng khớp).
+    /// Trả true nếu đã nhận link để tải tiếp tệp cũ; khi đó không hiện hộp tải mới.
+    /// </summary>
+    public Func<DownloadRequest, ProbeResult, string, bool>? TryRefresh { get; set; }
+
     public async Task HandleAsync(JsonNode msg, Func<JsonNode, Task<bool>> reply, Func<bool> isConnected)
     {
         CaptureMessage capture;
@@ -67,6 +73,11 @@ public class CaptureCoordinator(
         {
             fileName = Core.Engine.Hls.HlsDownloadEngine.WithExtension(fileName.Length > 0 ? fileName : "video", ".ts");
             result = result with { Size = null };
+        }
+        if (TryRefresh?.Invoke(req, result, fileName) == true)
+        {
+            await TryReply(reply, Messages.Reply(MessageTypes.Accepted, capture.Id));
+            return;
         }
         var category = resolver.Resolve(fileName);
         var proposed = Reserve(Path.Combine(resolver.FolderFor(category), fileName));

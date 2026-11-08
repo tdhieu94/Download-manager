@@ -129,6 +129,22 @@ public sealed class ResumeTests : IDisposable
     }
 
     [Fact]
+    public async Task refreshed_link_resumes_despite_new_etag()
+    {
+        await using var server = await SlowServer(o => o.ETag = "\"v1\"");
+        await PauseAt(server, 2 * MiB);
+        server.Options.ETag = "\"v2\"";
+        server.Options.ChunkDelay = TimeSpan.Zero;
+        var sentBefore = server.BytesSent;
+
+        var result = await Download(await Job(server) with { LinkRefreshed = true });
+
+        Assert.Equal(EngineOutcome.Completed, result.Outcome);
+        AssertSameContent(server.Options.Content, result.FinalPath);
+        Assert.True(server.BytesSent - sentBefore < server.Options.Content.Length);
+    }
+
+    [Fact]
     public async Task expired_link_on_resume()
     {
         await using var server = await SlowServer();
@@ -138,7 +154,7 @@ public sealed class ResumeTests : IDisposable
         var result = await Download(job);
 
         Assert.Equal(EngineOutcome.Failed, result.Outcome);
-        Assert.Equal("Link đã hết hạn, hãy bấm tải lại trên trang web", result.ErrorMessage);
+        Assert.Equal("Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp", result.ErrorMessage);
         Assert.True(File.Exists(_target + ".part"));
     }
 

@@ -14,7 +14,7 @@ public enum EngineOutcome
 
 public record EngineResult(EngineOutcome Outcome, string? FinalPath, string? ErrorMessage);
 
-public record DownloadJob(DownloadRequest Request, string TargetPath, string StatePath, int Connections, ProbeResult Probe);
+public record DownloadJob(DownloadRequest Request, string TargetPath, string StatePath, int Connections, ProbeResult Probe, bool LinkRefreshed = false);
 
 public interface IDownloadEngine
 {

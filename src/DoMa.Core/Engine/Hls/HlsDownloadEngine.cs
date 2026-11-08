@@ -36,9 +36,11 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             units.AddRange(playlist.Segments.Select(s => (s.Uri, (HlsSegment?)s)));
 
             var state = HlsState.Load(job.StatePath);
-            if (state is null || state.Playlist != mediaUrl.AbsoluteUri || state.Units != units.Count
+            // Link mới (link cũ hết hạn) thường đổi địa chỉ danh sách phát: chỉ cần số đoạn khớp là tải tiếp được.
+            if (state is null || (state.Playlist != mediaUrl.AbsoluteUri && !job.LinkRefreshed) || state.Units != units.Count
                 || !File.Exists(partPath) || new FileInfo(partPath).Length < state.Bytes)
                 state = new HlsState { Playlist = mediaUrl.AbsoluteUri, Units = units.Count };
+            state.Playlist = mediaUrl.AbsoluteUri;
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             var outcome = EngineOutcome.Completed;
@@ -191,7 +193,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             {
                 using var resp = await RequestSender.SendAsync(http, req, uri.AbsoluteUri, null, ct);
                 if (resp.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized or HttpStatusCode.Gone or HttpStatusCode.NotFound)
-                    throw new HlsException("Link video đã hết hạn hoặc bị chặn. Hãy mở lại trang và bắt video lần nữa.");
+                    throw new HlsException("Link video đã hết hạn hoặc bị chặn. Bấm chuột phải › Làm mới link để tải tiếp.");
                 resp.EnsureSuccessStatusCode();
                 var data = await resp.Content.ReadAsByteArrayAsync(ct);
                 if (Limiter is not null)

@@ -338,7 +338,7 @@ public sealed class RetryTests : IDisposable
         var result = await Download(job);
 
         Assert.Equal(EngineOutcome.Failed, result.Outcome);
-        Assert.Equal("Link đã hết hạn, hãy bấm tải lại trên trang web", result.ErrorMessage);
+        Assert.Equal("Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp", result.ErrorMessage);
         Assert.Empty(_delays);
     }
 

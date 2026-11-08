@@ -50,6 +50,10 @@ public sealed class MainForm : Form
     /// <summary>Chuyển video .ts đã tải sang .mp4.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Action<DownloadItem>? ConvertToMp4 { get; set; }
+
+    /// <summary>"Làm mới link": chờ link mới từ trình duyệt cho tệp này (sau khi mở trang nguồn).</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action<DownloadItem>? WaitForNewLink { get; set; }
     private readonly Action _openSettings;
     private readonly Action _requestExit;
     private readonly Action _shutdown;
@@ -738,6 +742,7 @@ public sealed class MainForm : Form
         var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
         var mp4 = ThemedRenderer.Item(menu, "Chuyển sang MP4", IconKind.Refresh, (_, _) => ForFirst(i => ConvertToMp4?.Invoke(i)));
         menu.Items.Add(new ToolStripSeparator());
+        var refresh = ThemedRenderer.Item(menu, "Làm mới link…", IconKind.Link, (_, _) => ForFirst(RefreshLink));
         ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
         {
             var ids = SelectedIds();
@@ -760,6 +765,8 @@ public sealed class MainForm : Form
             extract.Enabled = done;
             mp4.Visible = first is not null && Core.PostProcess.TsToMp4.CanConvert(first.TargetPath);
             mp4.Enabled = done;
+            refresh.Visible = first is not null && first.Status != DownloadStatus.Completed;
+            refresh.Enabled = first is { Status: not DownloadStatus.Downloading };
         };
         return menu;
     }
@@ -859,6 +866,42 @@ public sealed class MainForm : Form
             return text;
         MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         return null;
+    }
+
+    /// <summary>
+    /// Link cũ hết hạn: dán link mới, hoặc mở lại trang nguồn và bấm tải như thường — DoMa nhận link đó cho tệp này
+    /// và tải tiếp phần còn lại (nếu tệp trên máy chủ vẫn cùng dung lượng).
+    /// </summary>
+    private void RefreshLink(DownloadItem item)
+    {
+        var source = SourceUrl(item);
+        using var dialog = new AddLinkForm(
+            "Làm mới link",
+            source is null
+                ? "Dán link mới của tệp này, DoMa sẽ tải tiếp phần còn lại."
+                : "Dán link mới, hoặc mở trang nguồn rồi bấm tải lại như thường. DoMa sẽ tải tiếp phần còn lại.",
+            "Tải tiếp",
+            source is null ? null : "Mở trang nguồn");
+        var answer = dialog.ShowDialog(this);
+        if (answer == DialogResult.Retry)
+        {
+            WaitForNewLink?.Invoke(item);
+            OpenSource(item);
+            return;
+        }
+        if (answer != DialogResult.OK)
+            return;
+        var text = dialog.Link;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        {
+            MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        RunLogged(() =>
+        {
+            if (!_manager.ReplaceLink(item.Id, item.Request with { Url = uri.AbsoluteUri }))
+                MessageBox.Show(this, "Tệp này đang tải hoặc đã tải xong.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        });
     }
 
     private void RemoveSelected()

@@ -217,7 +217,7 @@ public sealed class DownloadManagerTests : IDisposable
         var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
 
         WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed);
-        Assert.Equal("Link đã hết hạn, hãy bấm tải lại trên trang web", m.Items.Single().ErrorMessage);
+        Assert.Equal("Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp", m.Items.Single().ErrorMessage);
         Assert.Equal(0, _engine.Runs);
     }
 
@@ -415,6 +415,54 @@ public sealed class DownloadManagerTests : IDisposable
         m.Resume([item.Id]);
         WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
         Assert.False(m.Items.Single().CanResume);
+    }
+
+    [Fact]
+    public void replace_link_requeues_failed_item_with_new_url()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/old"), Target("a.bin"), true);
+        _engine.Finish("https://h/old", new EngineResult(EngineOutcome.Failed, null, "hết hạn"));
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed);
+
+        Assert.True(m.ReplaceLink(item.Id, Req("https://h/new")));
+
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/new"));
+        Assert.True(_engine.Jobs["https://h/new"].LinkRefreshed);
+        Assert.Equal("https://h/new", m.Items.Single().Request.Url);
+        Assert.Null(m.Items.Single().ErrorMessage);
+    }
+
+    [Fact]
+    public void replace_link_refuses_running_or_completed()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+        Assert.False(m.ReplaceLink(item.Id, Req("https://h/b")));
+
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Completed, Target("a.bin"), null));
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Completed);
+        Assert.False(m.ReplaceLink(item.Id, Req("https://h/b")));
+    }
+
+    [Fact]
+    public void refresh_watch_matches_by_name_or_size_within_window()
+    {
+        var watch = new RefreshWatch(_time);
+        var a = new DownloadItem { Id = Guid.NewGuid(), Request = Req("https://h/a"), TargetPath = Target("Phim (2).mp4"), TotalBytes = 5 << 20, Status = DownloadStatus.Failed };
+        var b = new DownloadItem { Id = Guid.NewGuid(), Request = Req("https://h/b"), TargetPath = Target("other.zip"), TotalBytes = 9 << 20, Status = DownloadStatus.Paused };
+        DownloadItem[] items = [a, b];
+
+        Assert.Null(watch.Match(items, "phim.mp4", null));
+        watch.Arm(a.Id);
+        watch.Arm(b.Id);
+        Assert.Same(a, watch.Match(items, "PHIM.mp4", null));
+        Assert.Same(b, watch.Match(items, "random-token.bin", 9 << 20));
+        Assert.Null(watch.Match(items, "x.bin", 1000));
+
+        _time.Advance(RefreshWatch.Window + TimeSpan.FromSeconds(1));
+        Assert.Null(watch.Match(items, "phim.mp4", null));
     }
 
     private sealed class ManualTime : TimeProvider

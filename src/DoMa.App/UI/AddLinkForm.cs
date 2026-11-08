@@ -2,19 +2,23 @@ using DoMa.App.UI.Controls;
 
 namespace DoMa.App.UI;
 
-/// <summary>Hộp thoại dán đường dẫn tải thủ công.</summary>
+/// <summary>
+/// Hộp thoại dán đường dẫn tải thủ công. Cũng dùng cho "Làm mới link": khi đó có thêm nút phụ
+/// (vd. "Mở trang nguồn"), bấm nút này hộp thoại trả về <see cref="DialogResult.Retry"/>.
+/// </summary>
 public sealed class AddLinkForm : Form
 {
     private readonly InputBox _link = new(IconKind.Link) { PlaceholderText = "https://…" };
 
-    public AddLinkForm()
+    public AddLinkForm(string title = "Thêm link tải", string hint = "Dán đường dẫn http hoặc https của tệp bạn muốn tải.",
+        string okText = "Tiếp tục", string? secondaryText = null)
     {
-        Text = "Thêm link";
+        Text = title;
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(560, 236));
         int S(int v) => Theme.Scale(this, v);
 
-        var ok = new ModernButton("Tiếp tục", IconKind.Download, ButtonKind.Primary) { DialogResult = DialogResult.OK };
+        var ok = new ModernButton(okText, IconKind.Download, ButtonKind.Primary) { DialogResult = DialogResult.OK };
         var cancel = new ModernButton("Huỷ") { DialogResult = DialogResult.Cancel };
         AcceptButton = ok;
         CancelButton = cancel;
@@ -28,8 +32,11 @@ public sealed class AddLinkForm : Form
         body.Controls.Add(_link);
 
         Controls.Add(body);
-        Controls.Add(DialogParts.Footer(this, ok, cancel));
-        Controls.Add(DialogParts.Header(this, IconKind.Link, Theme.Accent, "Thêm link tải", "Dán đường dẫn http hoặc https của tệp bạn muốn tải."));
+        Button[] buttons = secondaryText is null
+            ? [ok, cancel]
+            : [ok, new ModernButton(secondaryText, IconKind.Link) { DialogResult = DialogResult.Retry }, cancel];
+        Controls.Add(DialogParts.Footer(this, buttons));
+        Controls.Add(DialogParts.Header(this, IconKind.Link, Theme.Accent, title, hint));
 
         Shown += (_, _) =>
         {

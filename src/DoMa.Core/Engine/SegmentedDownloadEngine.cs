@@ -25,8 +25,14 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         try
         {
             var saved = File.Exists(partPath) ? LoadResumable(job.StatePath) : null;
-            if (saved is not null && Changed(saved, job.Probe))
+            if (saved is not null && Changed(saved, job.Probe, job.LinkRefreshed))
                 return new EngineResult(EngineOutcome.NeedsRestart, null, null);
+            if (saved is not null && job.LinkRefreshed)
+            {
+                // Link mới (thường khác ETag/thời gian) cho cùng tệp: nhận dấu vết mới để lần sau so cho đúng.
+                saved.ETag = job.Probe.ETag;
+                saved.LastModified = job.Probe.LastModified;
+            }
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             Run run;
@@ -81,9 +87,12 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         return next == size;
     }
 
-    private static bool Changed(DownloadState saved, ProbeResult probe) =>
+    private static bool Changed(DownloadState saved, ProbeResult probe, bool linkRefreshed) =>
         saved.Size != probe.Size
-        || (saved.ETag is not null && saved.ETag != probe.ETag)
+        || (!linkRefreshed && ChangedTag(saved, probe));
+
+    private static bool ChangedTag(DownloadState saved, ProbeResult probe) =>
+        (saved.ETag is not null && saved.ETag != probe.ETag)
         || (saved.LastModified is not null && saved.LastModified != probe.LastModified);
 
     private static DownloadState CreateState(ProbeResult probe, int connections)
@@ -356,7 +365,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
     private static string Describe(Exception fault, string partPath) => fault switch
     {
         WriteFailedException w => WriteError(w.InnerException!, partPath),
-        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone } => "Link đã hết hạn, hãy bấm tải lại trên trang web",
+        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone } => "Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp",
         HttpRequestException { StatusCode: { } code } => $"Máy chủ trả lỗi {(int)code}",
         _ => "Lỗi mạng, đã thử lại nhiều lần nhưng không tải được",
     };

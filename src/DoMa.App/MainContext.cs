@@ -29,6 +29,7 @@ internal sealed class MainContext : ApplicationContext
     private readonly UpdateService _updates;
     private readonly Capture.ClipboardWatcher _clipboard;
     private readonly BandwidthLimiter _limiter = new();
+    private readonly RefreshWatch _refresh = new();
     private readonly ScheduleService _schedule;
     private volatile Settings _settings;
     private bool _exited;
@@ -60,6 +61,7 @@ internal sealed class MainContext : ApplicationContext
             _manager,
             () => new CategoryResolver(_settings.Extensions, _settings.RootFolder),
             Notify);
+        _coordinator.TryRefresh = TryRefreshLink;
 
         foreach (var item in _manager.Items)
             _lastStatus[item.Id] = item.Status;
@@ -71,6 +73,11 @@ internal sealed class MainContext : ApplicationContext
         _form.ThreatFound = item => HandleThreat(item.Id, item.TargetPath);
         _form.AddMany = AddManyAsync;
         _form.ConvertToMp4 = item => _ = ConvertVideoAsync(item.Id, item.TargetPath, notify: true);
+        _form.WaitForNewLink = item =>
+        {
+            _refresh.Arm(item.Id);
+            _tray?.Toast("Đang chờ link mới", $"Bấm tải “{Path.GetFileName(item.TargetPath)}” trên trang vừa mở, DoMa sẽ tải tiếp phần còn lại.", ToolTipIcon.None, null, 10);
+        };
         _schedule = new ScheduleService(_manager, () => _settings, text => _tray?.Notify(text, ShowNow), ConfirmPower);
         _form.QuickActions = new QuickActions(
             () => _settings.SpeedLimitKBps,
@@ -106,6 +113,18 @@ internal sealed class MainContext : ApplicationContext
                 CaptureMany(msg, connection.SendAsync);
                 break;
         }
+    }
+
+    /// <summary>Link vừa bắt từ trình duyệt là link mới của một tệp đang chờ làm mới link: nhận nó và tải tiếp.</summary>
+    private bool TryRefreshLink(DownloadRequest req, ProbeResult probe, string fileName)
+    {
+        if (_refresh.Match(_manager.Items, fileName, probe.Size) is not { } item)
+            return false;
+        if (!_manager.ReplaceLink(item.Id, req))
+            return false;
+        _refresh.Disarm(item.Id);
+        _tray.Toast("Đã làm mới link", $"{Path.GetFileName(item.TargetPath)} · đang tải tiếp phần còn lại", ToolTipIcon.Info, ShowNow);
+        return true;
     }
 
     public void ShowMain() => PostToForm(ShowNow);
