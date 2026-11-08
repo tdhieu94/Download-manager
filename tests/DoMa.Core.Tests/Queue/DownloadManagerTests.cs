@@ -423,6 +423,52 @@ public sealed class DownloadManagerTests : IDisposable
     }
 
     [Fact]
+    public void rename_completed_moves_file_and_updates_category()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        File.WriteAllText(Target("a.bin"), "x");
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Completed, Target("a.bin"), null));
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Completed);
+
+        Assert.Null(m.Rename(item.Id, "Bao cao.pdf"));
+
+        Assert.True(File.Exists(Target("Bao cao.pdf")));
+        Assert.False(File.Exists(Target("a.bin")));
+        Assert.Equal(Target("Bao cao.pdf"), m.Items.Single().TargetPath);
+        Assert.Equal(Category.Document, m.Items.Single().Category);
+    }
+
+    [Fact]
+    public void rename_unfinished_moves_part_file()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), false);
+        File.WriteAllText(item.TargetPath + ".part", "x");
+
+        Assert.Null(m.Rename(item.Id, "b.bin"));
+
+        Assert.True(File.Exists(Target("b.bin") + ".part"));
+        Assert.Equal(Target("b.bin"), m.Items.Single().TargetPath);
+    }
+
+    [Fact]
+    public void rename_refuses_invalid_taken_or_running()
+    {
+        var m = Manager();
+        var later = m.Add(Req("https://h/a"), Target("a.bin"), false);
+        File.WriteAllText(Target("taken.bin"), "x");
+        Assert.NotNull(m.Rename(later.Id, "x/y.bin"));
+        Assert.NotNull(m.Rename(later.Id, "a?.bin"));
+        Assert.NotNull(m.Rename(later.Id, "  "));
+        Assert.Contains("Đã có tệp", m.Rename(later.Id, "taken.bin"));
+
+        var running = m.Add(Req("https://h/r"), Target("r.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/r"));
+        Assert.Contains("tạm dừng", m.Rename(running.Id, "z.bin"));
+    }
+
+    [Fact]
     public void start_first_jumps_queue_and_bumps_last_running()
     {
         _settings.MaxConcurrent = 2;

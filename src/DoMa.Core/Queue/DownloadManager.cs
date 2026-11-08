@@ -228,6 +228,51 @@ public class DownloadManager
         }
     }
 
+    /// <summary>
+    /// Đổi tên tệp (cả tệp trên ổ, hoặc tệp .part nếu đang tải dở). Trả về câu báo lỗi, hoặc null nếu xong.
+    /// Không đổi được khi tệp đang tải.
+    /// </summary>
+    public string? Rename(Guid id, string newName)
+    {
+        newName = newName.Trim();
+        if (newName.Length == 0 || newName is "." or ".." || newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || newName.IndexOfAny(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) >= 0 || newName.EndsWith('.'))
+            return "Tên tệp không hợp lệ. Tên không được chứa các ký tự \\ / : * ? \" < > |";
+        lock (_gate)
+        {
+            var item = _items.FirstOrDefault(i => i.Id == id);
+            if (item is null)
+                return null;
+            if (_running.ContainsKey(id))
+                return "Hãy tạm dừng tệp trước khi đổi tên.";
+            var oldPath = item.TargetPath;
+            var newPath = Path.Combine(Path.GetDirectoryName(oldPath) ?? "", newName);
+            if (newPath == oldPath)
+                return null;
+            var sameFile = string.Equals(newPath, oldPath, StringComparison.OrdinalIgnoreCase);
+            if (!sameFile && (File.Exists(newPath) || Directory.Exists(newPath) || File.Exists(newPath + ".part")
+                              || _items.Any(i => i.Id != id && string.Equals(i.TargetPath, newPath, StringComparison.OrdinalIgnoreCase))))
+                return $"Đã có tệp tên “{newName}” trong thư mục này.";
+            try
+            {
+                var source = item.Status == DownloadStatus.Completed ? oldPath : oldPath + ".part";
+                var target = item.Status == DownloadStatus.Completed ? newPath : newPath + ".part";
+                if (File.Exists(source))
+                    File.Move(source, target);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return "Không đổi tên được: " + e.Message;
+            }
+            var settings = _settings();
+            item.TargetPath = newPath;
+            item.Category = new CategoryResolver(settings.Extensions, settings.RootFolder).Resolve(newName);
+            Persist();
+            Raise(Changed, item);
+            return null;
+        }
+    }
+
     /// <summary>Tệp đã tải được đổi sang tệp khác (vd. .ts → .mp4): cập nhật đường dẫn trong danh sách.</summary>
     public void Relocate(Guid id, string newPath)
     {

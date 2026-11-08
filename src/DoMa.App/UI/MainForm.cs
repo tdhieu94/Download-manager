@@ -733,6 +733,7 @@ public sealed class MainForm : Form
         ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath)));
         var source = ThemedRenderer.Item(menu, "Mở trang nguồn", IconKind.Link, (_, _) => ForFirst(OpenSource));
         ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink));
+        var rename = ThemedRenderer.Item(menu, "Đổi tên…", IconKind.File, (_, _) => ForFirst(RenameItem));
         menu.Items.Add(new ToolStripSeparator());
         var hash = ThemedRenderer.Item(menu, "Kiểm tra mã băm…", IconKind.Hash, (_, _) => ForFirst(i =>
         {
@@ -771,6 +772,7 @@ public sealed class MainForm : Form
             extract.Enabled = done;
             mp4.Visible = first is not null && Core.PostProcess.TsToMp4.CanConvert(first.TargetPath);
             mp4.Enabled = done;
+            rename.Enabled = first is { Status: not DownloadStatus.Downloading };
             startFirst.Visible = SelectedIds().Any(id => _manager.Items.FirstOrDefault(i => i.Id == id) is { Status: not (DownloadStatus.Completed or DownloadStatus.Downloading) });
             refresh.Visible = first is not null && first.Status != DownloadStatus.Completed;
             refresh.Enabled = first is { Status: not DownloadStatus.Downloading };
@@ -909,6 +911,18 @@ public sealed class MainForm : Form
             if (!_manager.ReplaceLink(item.Id, item.Request with { Url = uri.AbsoluteUri }))
                 MessageBox.Show(this, "Tệp này đang tải hoặc đã tải xong.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         });
+    }
+
+    private void RenameItem(DownloadItem item)
+    {
+        using var dialog = new RenameForm(Path.GetFileName(item.TargetPath));
+        while (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            var error = _manager.Rename(item.Id, dialog.NewName);
+            if (error is null)
+                return;
+            MessageBox.Show(this, error, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void RemoveSelected()
