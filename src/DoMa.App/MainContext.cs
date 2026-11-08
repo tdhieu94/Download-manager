@@ -31,6 +31,7 @@ internal sealed class MainContext : ApplicationContext
     private readonly BandwidthLimiter _limiter = new();
     private readonly RefreshWatch _refresh = new();
     private readonly System.Windows.Forms.Timer _networkTimer = new() { Interval = 30_000 };
+    private readonly System.Windows.Forms.Timer _trayTimer = new() { Interval = 1_000 };
     private readonly ScheduleService _schedule;
     private volatile Settings _settings;
     private bool _exited;
@@ -87,7 +88,10 @@ internal sealed class MainContext : ApplicationContext
             () => _schedule.AfterDone,
             _schedule.SetAfterDone,
             _schedule.Describe);
-        _tray = new TrayController(ShowNow, Exit, UI.MainForm.OpenFolder, () => _updates?.CheckNow());
+        _tray = new TrayController(ShowNow, Exit, UI.MainForm.OpenFolder, () => _updates?.CheckNow(),
+            PauseAll, ResumeAll,
+            () => (_manager.Items.Any(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued),
+                   _manager.Items.Any(i => i.Status is DownloadStatus.Paused or DownloadStatus.Failed)));
         _updates = new UpdateService(_form, _tray, () => _settings, ExitForUpdate, _log);
         _clipboard = new Capture.ClipboardWatcher(
             () => _settings.WatchClipboard,
@@ -99,6 +103,8 @@ internal sealed class MainContext : ApplicationContext
         ResumeAfterUpdate();
         _updates.Start();
         StartNetworkWatch();
+        _trayTimer.Tick += (_, _) => UpdateTrayStatus();
+        _trayTimer.Start();
     }
 
     public void OnMessage(PipeConnection connection, JsonNode msg)
@@ -315,6 +321,22 @@ internal sealed class MainContext : ApplicationContext
         _tray.Toast("Tải lỗi", Path.GetFileName(item.TargetPath), ToolTipIcon.Error, ShowNow);
     }
 
+    private void PauseAll() =>
+        _manager.Pause(_manager.Items.Where(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued).Select(i => i.Id).ToList());
+
+    private void ResumeAll() =>
+        _manager.Resume(_manager.Items.Where(i => i.Status is DownloadStatus.Paused or DownloadStatus.Failed).Select(i => i.Id).ToList());
+
+    /// <summary>Cập nhật dòng chữ của biểu tượng ở khay theo các tệp đang tải.</summary>
+    private void UpdateTrayStatus()
+    {
+        var active = _manager.Items.Where(i => i.Status == DownloadStatus.Downloading).ToList();
+        long? total = active.Count > 0 && active.All(i => i.TotalBytes is > 0) ? active.Sum(i => i.TotalBytes!.Value) : null;
+        var downloaded = active.Sum(i => i.DownloadedBytes);
+        var speed = active.Sum(i => _manager.SpeedBytesPerSec(i.Id));
+        _tray.SetStatus(TrayController.Summary(active.Count, downloaded, total, speed));
+    }
+
     /// <summary>Có mạng lại thì cho chạy tiếp ngay các tệp lỗi vì mất mạng; ngoài ra cứ 30 giây xem có tệp nào tới lượt thử lại.</summary>
     private void StartNetworkWatch()
     {
@@ -507,6 +529,7 @@ internal sealed class MainContext : ApplicationContext
         }
         System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailability;
         _networkTimer.Dispose();
+        _trayTimer.Dispose();
         _updates.Dispose();
         _clipboard.Dispose();
         _schedule.Dispose();
