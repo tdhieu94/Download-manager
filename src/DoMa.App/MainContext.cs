@@ -67,6 +67,7 @@ internal sealed class MainContext : ApplicationContext
 
         _form = new MainForm(_manager, AddLinkAsync, OpenSettings, Exit, ExitOnShutdown, _log);
         _form.ThreatFound = item => HandleThreat(item.Id, item.TargetPath);
+        _form.AddMany = AddManyAsync;
         _schedule = new ScheduleService(_manager, () => _settings, text => _tray?.Notify(text, ShowNow), ConfirmPower);
         _form.QuickActions = new QuickActions(
             () => _settings.SpeedLimitKBps,
@@ -97,6 +98,9 @@ internal sealed class MainContext : ApplicationContext
                 break;
             case MessageTypes.Capture:
                 _ = CaptureAsync(msg, connection.SendAsync, () => connection.IsConnected);
+                break;
+            case MessageTypes.CaptureMany:
+                CaptureMany(msg, connection.SendAsync);
                 break;
         }
     }
@@ -141,6 +145,68 @@ internal sealed class MainContext : ApplicationContext
 
     private void Notify(string message) =>
         PostToForm(() => MessageBox.Show(_form, message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information));
+
+    /// <summary>Tiện ích gửi tất cả link của một trang: cho người dùng chọn rồi thêm vào hàng tải.</summary>
+    private void CaptureMany(JsonNode msg, Func<JsonNode, Task<bool>> reply)
+    {
+        BatchCaptureMessage batch;
+        try
+        {
+            batch = BatchCaptureMessage.From(msg);
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException or System.Text.Json.JsonException)
+        {
+            return;
+        }
+        var source = Uri.TryCreate(batch.Referrer, UriKind.Absolute, out var page) ? page.Host : "";
+        PostToForm(() =>
+        {
+            var added = ChooseAndAdd(batch.Links, source, batch.Referrer, batch.CookiesByHost, batch.UserAgent);
+            _ = reply(Messages.Reply(added ? MessageTypes.Accepted : MessageTypes.Cancelled, batch.Id));
+        });
+    }
+
+    /// <summary>Mở hộp "Tải nhiều link"; trả về true nếu người dùng đã thêm ít nhất một link.</summary>
+    private bool ChooseAndAdd(IEnumerable<(string Url, string? Text)> raw, string source, string? referrer,
+        IReadOnlyDictionary<string, string>? cookiesByHost, string? userAgent)
+    {
+        var resolver = new CategoryResolver(_settings.Extensions, _settings.RootFolder);
+        var links = BatchLinks.Prepare(raw, resolver);
+        if (links.Count == 0)
+        {
+            _tray.Toast("Không có link nào để tải", source.Length > 0 ? $"Trang {source} không có link tải được." : "Không tìm thấy link http/https.", ToolTipIcon.Warning, null);
+            return false;
+        }
+        using var dialog = new UI.BatchForm(links, source);
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+            return false;
+        var referer = Uri.TryCreate(referrer, UriKind.Absolute, out var r) && r.Scheme is "http" or "https" ? referrer : null;
+        foreach (var link in dialog.Selected)
+        {
+            var cookies = cookiesByHost is not null && cookiesByHost.TryGetValue(link.Host, out var c) ? c : null;
+            var request = new DownloadRequest(link.Url, referer, link.FileName, null, null, cookies, userAgent);
+            var folder = resolver.FolderFor(resolver.Resolve(link.FileName));
+            try
+            {
+                _manager.Add(request, Path.Combine(folder, link.FileName), dialog.StartNow);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                _log.Write("batch", e, null);
+            }
+        }
+        ShowNow();
+        return true;
+    }
+
+    /// <summary>Dán/kéo-thả nhiều link vào cửa sổ chính.</summary>
+    private Task AddManyAsync(IReadOnlyList<string> urls)
+    {
+        if (urls.Count == 1)
+            return AddLinkAsync(urls[0]);
+        ChooseAndAdd(urls.Select(u => (u, (string?)null)), "", null, null, null);
+        return Task.CompletedTask;
+    }
 
     private static string LinkName(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath)) is { Length: > 0 } name

@@ -42,6 +42,10 @@ public sealed class MainForm : Form
     /// <summary>Khi quét thủ công phát hiện mã độc; MainContext ghi nhận và hỏi người dùng xử lý.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Action<DownloadItem>? ThreatFound { get; set; }
+
+    /// <summary>Thêm nhiều link một lúc (dán/kéo-thả): MainContext mở hộp "Tải nhiều link".</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Func<IReadOnlyList<string>, Task>? AddMany { get; set; }
     private readonly Action _openSettings;
     private readonly Action _requestExit;
     private readonly Action _shutdown;
@@ -794,7 +798,7 @@ public sealed class MainForm : Form
             .Select(t => t.Trim().Trim('"', '<', '>'))
             .Where(t => Uri.TryCreate(t, UriKind.Absolute, out var u) && u.Scheme is "http" or "https")
             .Distinct()
-            .Take(20)
+            .Take(Core.Files.BatchLinks.MaxLinks)
             .ToList();
 
     private static string? DroppedText(IDataObject? data)
@@ -808,6 +812,11 @@ public sealed class MainForm : Form
 
     private async Task AddLinksAsync(List<string> links)
     {
+        if (links.Count > 1 && AddMany is { } addMany)
+        {
+            await addMany(links);
+            return;
+        }
         foreach (var link in links)
             await _addLink(link);
     }

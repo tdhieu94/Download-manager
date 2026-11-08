@@ -152,6 +152,70 @@ export function decideManualReply(type) {
   return "done";
 }
 
+// ── "Tải tất cả link bằng DoMa" ──
+export const MAX_BATCH_LINKS = 1000;
+
+/**
+ * Chạy trong trang (chrome.scripting.executeScript): lấy mọi link và nguồn video/âm thanh.
+ * Nếu đang bôi đen một đoạn thì chỉ lấy link nằm trong đoạn đó. Hàm phải tự đủ, không dùng biến ngoài.
+ */
+export function collectPageLinks() {
+  const selection = window.getSelection();
+  const onlySelected = selection && !selection.isCollapsed && selection.rangeCount > 0;
+  const links = [];
+  for (const a of document.querySelectorAll("a[href]")) {
+    if (onlySelected && !selection.containsNode(a, true)) continue;
+    links.push({ url: a.href, text: (a.textContent || a.title || "").trim().replace(/\s+/g, " ").slice(0, 120) });
+  }
+  if (!onlySelected) {
+    for (const media of document.querySelectorAll("video[src], audio[src], source[src]")) {
+      links.push({ url: media.src, text: "" });
+    }
+  }
+  return links.slice(0, 3000);
+}
+
+/** Giữ link http(s), bỏ trùng (không tính phần #), tối đa MAX_BATCH_LINKS. */
+export function prepareBatch(links) {
+  const seen = new Set();
+  const result = [];
+  for (const link of links ?? []) {
+    const raw = String(link?.url ?? "");
+    if (!/^https?:\/\//i.test(raw)) continue;
+    const url = raw.split("#")[0];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    result.push({ url, text: String(link?.text ?? "") });
+    if (result.length >= MAX_BATCH_LINKS) break;
+  }
+  return result;
+}
+
+/** Mỗi tên miền một link đại diện, để lấy cookie một lần cho cả tên miền (tối đa 50 tên miền). */
+export function hostsOf(links, limit = 50) {
+  const hosts = new Map();
+  for (const { url } of links) {
+    try {
+      const host = new URL(url).host;
+      if (!hosts.has(host)) hosts.set(host, url);
+    } catch {
+    }
+    if (hosts.size >= limit) break;
+  }
+  return hosts;
+}
+
+export function toBatchMessage(id, pageUrl, links, cookiesByHost, userAgent) {
+  return {
+    type: "bat_nhieu",
+    id,
+    referrer: /^https?:\/\//i.test(String(pageUrl ?? "")) ? pageUrl : null,
+    links,
+    cookies: cookiesByHost,
+    userAgent,
+  };
+}
+
 export function toCaptureMessage(item, cookies, userAgent) {
   return {
     type: "bat",

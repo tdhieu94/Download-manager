@@ -1,6 +1,7 @@
 import {
   shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, shouldReload,
   manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply,
+  collectPageLinks, prepareBatch, hostsOf, toBatchMessage,
 } from "./capture.js";
 
 const HOST_NAME = "com.doma.host";
@@ -234,6 +235,7 @@ chrome.downloads.onCreated.addListener(async (item) => {
 
 // ── Menu chuột phải: "Tải bằng DoMa" cho mọi link, ảnh, video, âm thanh ──
 const MENU_ID = "doma-download";
+const MENU_ALL_ID = "doma-download-all";
 
 function createMenu() {
   chrome.contextMenus.removeAll(() => {
@@ -241,6 +243,11 @@ function createMenu() {
       id: MENU_ID,
       title: "Tải bằng DoMa",
       contexts: ["link", "image", "video", "audio"],
+    });
+    chrome.contextMenus.create({
+      id: MENU_ALL_ID,
+      title: "Tải tất cả link bằng DoMa…",
+      contexts: ["page", "selection", "link"],
     });
   });
 }
@@ -275,7 +282,40 @@ async function captureManual(url, pageUrl) {
   }
 }
 
+async function captureAll(tab, pageUrl) {
+  if (tab?.id == null) return;
+  let links;
+  try {
+    const [frame] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: collectPageLinks });
+    links = prepareBatch(frame?.result);
+  } catch {
+    return; // Trang không cho chạy script (trang hệ thống, cửa hàng tiện ích…).
+  }
+  let activePort;
+  try {
+    activePort = await connect();
+  } catch {
+    return;
+  }
+  const cookies = {};
+  for (const [host, url] of hostsOf(links)) {
+    const value = await buildCookies(url);
+    if (value) cookies[host] = value;
+  }
+  const id = manualId(`${Date.now()}-${++manualCounter}`);
+  manual.set(id, null);
+  try {
+    activePort.postMessage(toBatchMessage(id, pageUrl, links, cookies, navigator.userAgent));
+  } catch {
+    manual.delete(id);
+  }
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === MENU_ALL_ID) {
+    captureAll(tab, info.pageUrl || tab?.url);
+    return;
+  }
   if (info.menuItemId !== MENU_ID) return;
   const url = contextUrl(info);
   if (url) captureManual(url, info.pageUrl || tab?.url);

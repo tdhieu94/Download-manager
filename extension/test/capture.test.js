@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply } from "../capture.js";
+import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage } from "../capture.js";
 
 const base = { id: 1, url: "https://example.com/a.zip", state: "in_progress", incognito: false };
 const on = { enabled: true };
@@ -207,4 +207,27 @@ test("manual give-back falls back to browser download", () => {
   assert.equal(decideManualReply("dang_hoi"), "markAsking");
   assert.equal(decideManualReply("nhan"), "done");
   assert.equal(decideManualReply("huy"), "done");
+});
+
+test("batch keeps http(s) links once, ignoring fragments", () => {
+  const links = prepareBatch([
+    { url: "https://a.com/x.zip", text: "X" },
+    { url: "https://a.com/x.zip#top", text: "X again" },
+    { url: "javascript:void(0)", text: "js" },
+    { url: "mailto:a@b.c" },
+    { url: "http://b.com/y.pdf" },
+  ]);
+  assert.deepEqual(links.map((l) => l.url), ["https://a.com/x.zip", "http://b.com/y.pdf"]);
+  assert.equal(links[1].text, "");
+});
+
+test("one cookie lookup per host", () => {
+  const hosts = hostsOf([{ url: "https://a.com/1" }, { url: "https://a.com/2" }, { url: "https://cdn.a.com/3" }]);
+  assert.deepEqual([...hosts.keys()], ["a.com", "cdn.a.com"]);
+});
+
+test("batch message drops non-http referrer", () => {
+  const msg = toBatchMessage("m1", "chrome://newtab", [], {}, "UA");
+  assert.equal(msg.type, "bat_nhieu");
+  assert.equal(msg.referrer, null);
 });
