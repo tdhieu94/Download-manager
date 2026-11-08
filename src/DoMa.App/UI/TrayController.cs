@@ -8,7 +8,7 @@ public sealed class TrayController : IDisposable
 
     private readonly NotifyIcon _icon;
     private readonly Action<string> _openFolder;
-    private Action? _balloonAction;
+    private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
 
     public TrayController(Action open, Action exit, Action<string> openFolder, Action checkUpdates)
     {
@@ -31,23 +31,25 @@ public sealed class TrayController : IDisposable
             if (e.Button == MouseButtons.Left)
                 open();
         };
-        _icon.BalloonTipClicked += (_, _) =>
-        {
-            _balloonAction?.Invoke();
-        };
     }
 
-    public void Notify(string text, string? pathToOpen, ToolTipIcon icon)
-    {
-        _balloonAction = pathToOpen is null ? null : () => _openFolder(pathToOpen);
-        _icon.ShowBalloonTip(5000, Title, text, icon);
-    }
+    public void Notify(string text, string? pathToOpen, ToolTipIcon icon) =>
+        Toast(Title, text, icon, pathToOpen is null ? null : () => _openFolder(pathToOpen));
 
     /// <summary>Thông báo kèm hành động khi người dùng bấm vào thông báo.</summary>
-    public void Notify(string text, Action onClick)
+    public void Notify(string text, Action onClick) => Toast(Title, text, ToolTipIcon.Info, onClick, 8);
+
+    /// <summary>
+    /// Hiện thông báo bằng cửa sổ nhỏ tự vẽ ở góc màn hình (không dùng balloon của Windows,
+    /// vốn bị ẩn khi tắt thông báo hoặc bật Focus Assist).
+    /// </summary>
+    public void Toast(string title, string text, ToolTipIcon kind, Action? onClick, int seconds = 6)
     {
-        _balloonAction = onClick;
-        _icon.ShowBalloonTip(8000, Title, text, ToolTipIcon.Info);
+        void Show() => ToastForm.Show(title, text, kind, onClick, seconds);
+        if (_ui is null || SynchronizationContext.Current == _ui)
+            Show();
+        else
+            _ui.Post(_ => Show(), null);
     }
 
     public void Dispose()

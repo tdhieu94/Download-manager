@@ -943,7 +943,9 @@ public sealed class MainForm : Form
 
         var current = _nav.Selected;
         var query = _search.Text.Trim();
+        // Tệp mới thêm gần nhất đứng trên cùng.
         var next = items
+            .OrderByDescending(i => i.AddedAt)
             .Where(i => DownloadView.Matches(current, i))
             .Where(i => query.Length == 0 || Path.GetFileName(i.TargetPath).Contains(query, StringComparison.CurrentCultureIgnoreCase))
             .ToList();

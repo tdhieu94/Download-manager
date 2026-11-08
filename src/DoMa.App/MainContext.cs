@@ -204,7 +204,7 @@ internal sealed class MainContext : ApplicationContext
         _lastStatus.TryGetValue(item.Id, out var previous);
         _lastStatus[item.Id] = item.Status;
         if (item.Status == DownloadStatus.Failed && previous != DownloadStatus.Failed)
-            _tray.Notify($"Tải lỗi: {Path.GetFileName(item.TargetPath)}", item.TargetPath, ToolTipIcon.Error);
+            _tray.Toast("Tải lỗi", Path.GetFileName(item.TargetPath), ToolTipIcon.Error, ShowNow);
     }
 
     private void OnCompleted(DownloadItem item)
@@ -215,7 +215,7 @@ internal sealed class MainContext : ApplicationContext
         var id = item.Id;
         _ = Task.Run(() => PostProcessAsync(id, path, url, settings));
         if (_settings.NotifyOnComplete)
-            _tray.Notify($"Đã tải xong: {Path.GetFileName(item.TargetPath)}", item.TargetPath, ToolTipIcon.Info);
+            _tray.Toast("Đã tải xong", Path.GetFileName(item.TargetPath), ToolTipIcon.Info, () => UI.MainForm.OpenFolder(path));
     }
 
     private static string ResumeFile => Path.Combine(AppPaths.DataDir, "resume-after-update.json");
