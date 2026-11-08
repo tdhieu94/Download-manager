@@ -60,7 +60,19 @@ public sealed class HashForm : Form
         Controls.Add(DialogParts.Header(this, IconKind.Shield, Theme.Success, Path.GetFileName(path), "Đối chiếu mã băm để chắc tệp không bị hỏng hay bị tráo."));
 
         _expected.TextChanged += (_, _) => Compare();
-        Shown += async (_, _) => await ComputeAsync();
+        Shown += async (_, _) =>
+        {
+            // Vừa copy mã băm trên trang tải: dán sẵn để so ngay.
+            try
+            {
+                if (_expected.Text.Length == 0 && Clipboard.ContainsText() && FileHasher.FindHash(Clipboard.GetText()) is { } copied)
+                    _expected.Text = copied;
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+            }
+            await ComputeAsync();
+        };
         FormClosed += (_, _) => _cts.Cancel();
     }
 

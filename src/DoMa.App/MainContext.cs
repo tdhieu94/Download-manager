@@ -83,7 +83,7 @@ internal sealed class MainContext : ApplicationContext
         _form = new MainForm(_manager, AddLinkAsync, OpenSettings, Exit, ExitOnShutdown, _log);
         _form.ThreatFound = item => HandleThreat(item.Id, item.TargetPath);
         _form.AddMany = AddManyAsync;
-        _form.ConvertToMp4 = item => _ = ConvertVideoAsync(item.Id, item.TargetPath, notify: true);
+        _form.ConvertMedia = (item, extension) => _ = ConvertMediaAsync(item, extension);
         _form.WaitForNewLink = item =>
         {
             _refresh.Arm(item.Id);
@@ -664,7 +664,8 @@ internal sealed class MainContext : ApplicationContext
     /// Chuyển video .ts sang .mp4 (đóng gói lại, không nén), xoá tệp .ts và cập nhật danh sách.
     /// Trả về đường dẫn .mp4, hoặc null nếu không chuyển được (giữ nguyên .ts).
     /// </summary>
-    private async Task<string?> ConvertVideoAsync(Guid id, string path, bool notify)
+    /// <param name="quiet">Không báo khi không chuyển được (người gọi sẽ thử cách khác).</param>
+    private async Task<string?> ConvertVideoAsync(Guid id, string path, bool notify, bool quiet = false)
     {
         var output = FileNameResolver.MakeUnique(Path.ChangeExtension(path, ".mp4"), p => File.Exists(p) || Directory.Exists(p));
         try
@@ -679,9 +680,55 @@ internal sealed class MainContext : ApplicationContext
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException)
         {
             _log.Write("mp4", e, null);
+            if (quiet)
+                return null;
             var reason = e is NotSupportedException ? e.Message : "Không chuyển được sang MP4, tệp .ts vẫn được giữ nguyên.";
             PostToForm(() => _tray.Notify(reason, path, ToolTipIcon.Warning));
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Menu "Chuyển sang MP4/MP3". MP4: thay tệp gốc (đóng gói lại, nếu không được thì nén lại).
+    /// MP3: tạo tệp mới cạnh tệp gốc, giữ nguyên tệp gốc.
+    /// </summary>
+    private async Task ConvertMediaAsync(DownloadItem item, string extension)
+    {
+        var id = item.Id;
+        var path = item.TargetPath;
+        var toMp3 = extension == ".mp3";
+        // Video .ts: DoMa tự đóng gói lại được, không cần ffmpeg.
+        if (!toMp3 && TsToMp4.CanConvert(path) && await ConvertVideoAsync(id, path, notify: true, quiet: true) is not null)
+            return;
+        if (!File.Exists(_ytTools.FfmpegPath) && !await EnsureYouTubeToolsAsync())
+            return;
+        var output = FileNameResolver.MakeUnique(Path.ChangeExtension(path, extension), p => File.Exists(p) || Directory.Exists(p));
+        var name = Path.GetFileName(path);
+        PostToForm(() => _tray.Toast(toMp3 ? "Đang tách nhạc MP3" : "Đang chuyển sang MP4", name, ToolTipIcon.None, null, 5));
+        try
+        {
+            if (toMp3)
+                await Core.PostProcess.MediaConverter.RunAsync(_ytTools.FfmpegPath, Core.PostProcess.MediaConverter.Mp3Arguments(path, output));
+            else
+            {
+                try
+                {
+                    await Core.PostProcess.MediaConverter.RunAsync(_ytTools.FfmpegPath, Core.PostProcess.MediaConverter.Mp4CopyArguments(path, output));
+                }
+                catch (IOException)
+                {
+                    // Định dạng gốc không đóng gói thẳng vào MP4 được: nén lại (chậm hơn).
+                    await Core.PostProcess.MediaConverter.RunAsync(_ytTools.FfmpegPath, Core.PostProcess.MediaConverter.Mp4EncodeArguments(path, output));
+                }
+                File.Delete(path);
+                _manager.Relocate(id, output);
+            }
+            PostToForm(() => _tray.Notify($"{(toMp3 ? "Đã tách nhạc" : "Đã chuyển sang MP4")}: {Path.GetFileName(output)}", output, ToolTipIcon.Info));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            _log.Write("convert", e, null);
+            PostToForm(() => _tray.Notify($"Không đổi được định dạng {name}. {e.Message}", path, ToolTipIcon.Warning));
         }
     }
 

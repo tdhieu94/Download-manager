@@ -37,6 +37,19 @@ public static class FileHasher
     /// So mã băm người dùng dán vào (bỏ khoảng trắng, không phân biệt hoa thường; chấp nhận dạng "HASH  tên-file").
     /// Trả về tên thuật toán khớp, hoặc null nếu không khớp.
     /// </summary>
+    /// <summary>Mã băm (MD5/SHA-1/SHA-256, dạng hex) đầu tiên trong đoạn văn bản, vd. nội dung vừa copy; null nếu không có.</summary>
+    public static string? FindHash(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 100_000)
+            return null;
+        foreach (var token in text.Split([' ', '\t', '\r', '\n', '*', ':', '=', ',', ';', '(', ')', '"', '\''], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token.Length is 32 or 40 or 64 && token.All(char.IsAsciiHexDigit))
+                return token.ToLowerInvariant();
+        }
+        return null;
+    }
+
     public static string? Match(string expected, FileHashes hashes)
     {
         var token = expected.Trim().Split([' ', '\t', '\r', '\n', '*'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();

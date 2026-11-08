@@ -48,9 +48,9 @@ public sealed class MainForm : Form
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Func<IReadOnlyList<string>, Task>? AddMany { get; set; }
 
-    /// <summary>Chuyển video .ts đã tải sang .mp4.</summary>
+    /// <summary>Đổi định dạng tệp đã tải: ".mp4" (thay tệp gốc) hoặc ".mp3" (tách nhạc thành tệp mới).</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-    public Action<DownloadItem>? ConvertToMp4 { get; set; }
+    public Action<DownloadItem, string>? ConvertMedia { get; set; }
 
     /// <summary>"Làm mới link": chờ link mới từ trình duyệt cho tệp này (sau khi mở trang nguồn).</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -800,7 +800,8 @@ public sealed class MainForm : Form
         }));
         var scan = ThemedRenderer.Item(menu, "Quét bằng Windows Defender", IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i)));
         var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
-        var mp4 = ThemedRenderer.Item(menu, "Chuyển sang MP4", IconKind.Refresh, (_, _) => ForFirst(i => ConvertToMp4?.Invoke(i)));
+        var mp4 = ThemedRenderer.Item(menu, "Chuyển sang MP4", IconKind.Refresh, (_, _) => ForFirst(i => ConvertMedia?.Invoke(i, ".mp4")));
+        var mp3 = ThemedRenderer.Item(menu, "Tách nhạc MP3", IconKind.Refresh, (_, _) => ForFirst(i => ConvertMedia?.Invoke(i, ".mp3")));
         menu.Items.Add(new ToolStripSeparator());
         var startFirst = ThemedRenderer.Item(menu, "Tải trước", IconKind.Play, (_, _) =>
         {
@@ -828,8 +829,10 @@ public sealed class MainForm : Form
             scan.Enabled = done && Core.PostProcess.SecurityTools.DefenderPath() is not null;
             extract.Visible = first is not null && Core.PostProcess.ArchiveExtractor.CanExtract(first.TargetPath);
             extract.Enabled = done;
-            mp4.Visible = first is not null && Core.PostProcess.TsToMp4.CanConvert(first.TargetPath);
+            mp4.Visible = first is not null && Core.PostProcess.MediaConverter.CanConvertToMp4(first.TargetPath);
             mp4.Enabled = done;
+            mp3.Visible = first is not null && Core.PostProcess.MediaConverter.CanConvertToMp3(first.TargetPath);
+            mp3.Enabled = done;
             rename.Enabled = first is { Status: not DownloadStatus.Downloading };
             startFirst.Visible = SelectedIds().Any(id => _manager.Items.FirstOrDefault(i => i.Id == id) is { Status: not (DownloadStatus.Completed or DownloadStatus.Downloading) });
             refresh.Visible = first is not null && first.Status != DownloadStatus.Completed;
