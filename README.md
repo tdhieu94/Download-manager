@@ -21,7 +21,7 @@
 - **Bắt lượt tải từ trình duyệt.** Bấm tải trên Chrome hoặc Edge, DoMa nhận link ngay, kèm cookie, referer và user-agent, nên tải được cả link cần đăng nhập hoặc link có token hết hạn.
 - **Tải nhanh, nhiều kết nối.** Mỗi file được chia đoạn và tải song song (mặc định 16 kết nối, chỉnh được từ 1 đến 32).
 - **Tải tiếp khi bị ngắt.** Mất mạng, tắt app hay tắt máy đều tải tiếp được (khi máy chủ hỗ trợ `Range`).
-- **Bắt video trên trang và tải YouTube.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video YouTube được tải ở chất lượng tốt nhất tới 1080p, ghép sẵn thành `.mp4`.
+- **Bắt video trên trang và tải YouTube.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video YouTube được tải ở độ phân giải cao nhất mà video có (1080p, 2K, 4K…), ghép sẵn thành `.mp4`.
 - **Tự phân loại.** File được xếp vào thư mục `TaiLieu`, `PhanMem`, `Nen`, `Video` hoặc `Khac` theo đuôi file. Bạn tự chỉnh danh sách đuôi được.
 - **Tải ngay hoặc Tải sau.** Mỗi lượt tải có hộp xác nhận để đổi tên hoặc nơi lưu, hoặc để dành vào hàng chờ.
 - **Chạy ngầm dưới khay hệ thống**, có thông báo khi tải xong hoặc lỗi, và có thể khởi động cùng Windows.

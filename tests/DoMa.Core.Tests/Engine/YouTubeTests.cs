@@ -91,6 +91,17 @@ public sealed class YouTubeTests : IDisposable
     }
 
     [Fact]
+    public void picks_highest_resolution_without_cap()
+    {
+        foreach (var args in new[] { YtDlp.DownloadArguments(W, "x", null, null).ToList(), YtDlp.InfoArguments(W, null).ToList() })
+        {
+            Assert.Equal("bv*+ba/b", args[args.IndexOf("-f") + 1]);
+            Assert.StartsWith("res,", args[args.IndexOf("-S") + 1]);
+            Assert.DoesNotContain(args, a => a.Contains("1080"));
+        }
+    }
+
+    [Fact]
     public void netscape_cookies_skip_bad_parts()
     {
         var text = YtDlp.NetscapeCookies("SID=abc; bad; PREF=f1=1&f2=2");

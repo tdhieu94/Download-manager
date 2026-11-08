@@ -19,12 +19,18 @@ public static class YtDlp
     public const string ProgressPrefix = "DOMA_P ";
     public const string FilePrefix = "DOMA_FILE:";
 
-    /// <summary>Ưu tiên H.264 + AAC (mở được trên mọi máy) tới 1080p; không có thì lấy bản tốt nhất còn lại.</summary>
-    public const string Format = "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b";
+    /// <summary>Lấy hình và tiếng tốt nhất mà video có.</summary>
+    public const string Format = "bv*+ba/b";
+
+    /// <summary>
+    /// Độ phân giải cao nhất trước (4K nếu video có 4K), rồi khung hình/giây. Cùng độ phân giải thì ưu tiên
+    /// H.264 + AAC vì mở được trên mọi máy; trên 1080p YouTube chỉ có VP9/AV1 nên chọn VP9 trước AV1.
+    /// </summary>
+    public const string Sort = "res,fps,vcodec:h264,acodec:aac";
 
     public static IReadOnlyList<string> InfoArguments(string url, string? cookieFile, string? denoPath = null) =>
     [
-        "-J", "--no-playlist", "--no-warnings", "--encoding", "utf-8", "-f", Format,
+        "-J", "--no-playlist", "--no-warnings", "--encoding", "utf-8", "-f", Format, "-S", Sort,
         .. Runtime(denoPath),
         .. Cookies(cookieFile),
         "--", url,
@@ -34,7 +40,7 @@ public static class YtDlp
     public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null) =>
     [
         "--no-playlist", "--no-warnings", "--encoding", "utf-8", "--newline", "--progress", "--no-mtime",
-        "-f", Format, "--merge-output-format", "mp4",
+        "-f", Format, "-S", Sort, "--merge-output-format", "mp4",
         .. (ffmpegDir is null ? Array.Empty<string>() : ["--ffmpeg-location", ffmpegDir]),
         "-o", outputStem.Replace("%", "%%") + ".%(ext)s",
         "--progress-template", "download:" + ProgressPrefix + "%(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s",
