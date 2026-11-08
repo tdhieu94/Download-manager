@@ -28,6 +28,7 @@ function describe(entry) {
       return "";
     }
   })();
+  if (entry.kind === "youtube") return "YouTube · chất lượng cao nhất (tối đa 1080p)";
   const kind = entry.kind === "hls" ? "Luồng HLS" : entry.name.split(".").pop().toUpperCase();
   return [kind, formatSize(entry.size), host].filter(Boolean).join(" · ");
 }

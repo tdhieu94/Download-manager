@@ -21,7 +21,8 @@
 - **Bắt lượt tải từ trình duyệt.** Bấm tải trên Chrome hoặc Edge, DoMa nhận link ngay, kèm cookie, referer và user-agent, nên tải được cả link cần đăng nhập hoặc link có token hết hạn.
 - **Tải nhanh, nhiều kết nối.** Mỗi file được chia đoạn và tải song song (mặc định 16 kết nối, chỉnh được từ 1 đến 32).
 - **Tải tiếp khi bị ngắt.** Mất mạng, tắt app hay tắt máy đều tải tiếp được (khi máy chủ hỗ trợ `Range`).
-- **Tự phân loại.** File được xếp vào thư mục `TaiLieu`, `PhanMem`, `Nen` hoặc `Khac` theo đuôi file. Bạn tự chỉnh danh sách đuôi được.
+- **Bắt video trên trang và tải YouTube.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video YouTube được tải ở chất lượng tốt nhất tới 1080p, ghép sẵn thành `.mp4`.
+- **Tự phân loại.** File được xếp vào thư mục `TaiLieu`, `PhanMem`, `Nen`, `Video` hoặc `Khac` theo đuôi file. Bạn tự chỉnh danh sách đuôi được.
 - **Tải ngay hoặc Tải sau.** Mỗi lượt tải có hộp xác nhận để đổi tên hoặc nơi lưu, hoặc để dành vào hàng chờ.
 - **Chạy ngầm dưới khay hệ thống**, có thông báo khi tải xong hoặc lỗi, và có thể khởi động cùng Windows.
 - **Tự động cập nhật** cả ứng dụng lẫn tiện ích trình duyệt (xem [bên dưới](#tự-động-cập-nhật)).
@@ -65,3 +66,6 @@ Bấm nút đóng cửa sổ chỉ ẩn DoMa xuống khay. Muốn thoát hẳn, 
 - Cookie của từng lượt tải được mã hoá bằng Windows DPAPI (chỉ tài khoản Windows của bạn giải mã được) và bị xoá khi tải xong.
 - Nhật ký lỗi tự lược bỏ phần query của URL (token, chữ ký…).
 - DoMa chỉ kết nối tới máy chủ của file bạn tải và tới `api.github.com` để kiểm tra bản cập nhật.
+- Tải YouTube dùng hai công cụ mã nguồn mở [yt-dlp](https://github.com/yt-dlp/yt-dlp) và [ffmpeg](https://ffmpeg.org). Chúng không có sẵn trong bộ cài: lần đầu bạn tải video YouTube, DoMa hỏi rồi mới tải chúng từ GitHub về `%LOCALAPPDATA%\DoMa\tools` (khoảng 120 MB). yt-dlp được tự cập nhật mỗi tuần.
+- Khi tải YouTube, cookie YouTube của trình duyệt được ghi tạm cho yt-dlp dùng và xoá ngay khi xong.
+- Hãy chỉ tải video bạn có quyền tải (video của bạn, video cho phép tải, dùng cá nhân theo luật nơi bạn sống).

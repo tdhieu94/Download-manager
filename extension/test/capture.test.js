@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage, classifyMedia, totalFromHeaders, mediaFileName, addMedia, MAX_MEDIA_PER_TAB } from "../capture.js";
+import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage, classifyMedia, totalFromHeaders, mediaFileName, addMedia, MAX_MEDIA_PER_TAB, youtubeVideoUrl, youtubeEntry } from "../capture.js";
 
 const base = { id: 1, url: "https://example.com/a.zip", state: "in_progress", incognito: false };
 const on = { enabled: true };
@@ -261,4 +261,26 @@ test("media list dedupes and keeps newest first, capped", () => {
   assert.equal(list.length, MAX_MEDIA_PER_TAB);
   assert.equal(list[0].url, "u10");
   assert.equal(list.filter((m) => m.url === "u10").length, 1);
+});
+
+test("recognises YouTube video pages and normalises the link", () => {
+  const W = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+  assert.equal(youtubeVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1&t=30s"), W);
+  assert.equal(youtubeVideoUrl("https://m.youtube.com/watch?v=dQw4w9WgXcQ"), W);
+  assert.equal(youtubeVideoUrl("https://youtu.be/dQw4w9WgXcQ?si=abc"), W);
+  assert.equal(youtubeVideoUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ"), W);
+  assert.equal(youtubeVideoUrl("https://www.youtube.com/embed/dQw4w9WgXcQ"), W);
+  assert.equal(youtubeVideoUrl("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), W);
+  assert.equal(youtubeVideoUrl("https://www.youtube.com/"), null);
+  assert.equal(youtubeVideoUrl("https://www.youtube.com/@channel"), null);
+  assert.equal(youtubeVideoUrl("https://www.youtube.com/watch?v=short"), null);
+  assert.equal(youtubeVideoUrl("https://notyoutube.com/watch?v=dQw4w9WgXcQ"), null);
+});
+
+test("YouTube entry takes the video title", () => {
+  const e = youtubeEntry("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "(3) Bài hát: Hay - YouTube");
+  assert.equal(e.kind, "youtube");
+  assert.equal(e.url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  assert.equal(e.name, "Bài hát Hay.mp4");
+  assert.equal(youtubeEntry("https://www.youtube.com/feed", "YouTube"), null);
 });

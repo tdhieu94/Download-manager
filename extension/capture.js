@@ -217,6 +217,37 @@ export function mediaFileName(title, url, media) {
   return `${base}.${media.kind === "hls" ? "ts" : media.ext}`;
 }
 
+// ── YouTube: DoMa tải qua công cụ yt-dlp, tiện ích chỉ cần gửi link trang video ──
+const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** Link trang video YouTube (watch, shorts, youtu.be, embed) đưa về dạng chuẩn https://www.youtube.com/watch?v=ID; null nếu không phải. */
+export function youtubeVideoUrl(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const host = u.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, "");
+  let id = null;
+  if (host === "youtu.be") id = u.pathname.split("/")[1] ?? null;
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    const parts = u.pathname.split("/");
+    if (u.pathname === "/watch") id = u.searchParams.get("v");
+    else if (["shorts", "embed", "live", "v"].includes(parts[1])) id = parts[2] ?? null;
+  }
+  return id && YT_ID.test(id) ? `https://www.youtube.com/watch?v=${id}` : null;
+}
+
+/** Mục "video YouTube" cho danh sách trong cửa sổ tiện ích. */
+export function youtubeEntry(pageUrl, title) {
+  const url = youtubeVideoUrl(pageUrl);
+  if (!url) return null;
+  const clean = String(title ?? "").replace(/\s*-\s*YouTube\s*$/i, "").replace(/^\(\d+\)\s*/, "");
+  return { url, kind: "youtube", mime: null, size: null, name: mediaFileName(clean || "YouTube", url, { kind: "file", ext: "mp4" }), pageUrl: url, at: Date.now() };
+}
+
 /** Thêm vào danh sách media của một tab: bỏ trùng theo link, giữ tối đa MAX_MEDIA_PER_TAB mục mới nhất. */
 export function addMedia(list, entry) {
   const next = (list ?? []).filter((m) => m.url !== entry.url);

@@ -30,6 +30,10 @@ internal sealed class MainContext : ApplicationContext
     private readonly Capture.ClipboardWatcher _clipboard;
     private readonly BandwidthLimiter _limiter = new();
     private readonly RefreshWatch _refresh = new();
+    private readonly Core.Engine.YouTube.YouTubeTools _ytTools;
+    private readonly Core.Engine.YouTube.YouTubeDownloadEngine _ytEngine;
+    private readonly SynchronizationContext _ui;
+    private Task<bool>? _ytInstall;
     private readonly System.Windows.Forms.Timer _networkTimer = new() { Interval = 30_000 };
     private readonly System.Windows.Forms.Timer _trayTimer = new() { Interval = 1_000 };
     private readonly ScheduleService _schedule;
@@ -44,21 +48,24 @@ internal sealed class MainContext : ApplicationContext
         _limiter.LimitBytesPerSec = _settings.SpeedLimitKBps * 1024L;
         Theme.Use(Enum.TryParse<ThemeMode>(_settings.Appearance, true, out var mode) ? mode : ThemeMode.System);
 
-        var ui = new WindowsFormsSynchronizationContext();
+        var ui = _ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
+        _ytTools = new Core.Engine.YouTube.YouTubeTools(Path.Combine(AppPaths.DataDir, "tools"), _http);
+        _ytEngine = new Core.Engine.YouTube.YouTubeDownloadEngine(_ytTools);
 
         var prober = new LinkProber(_http);
         _manager = new DownloadManager(
             new Core.Engine.Hls.MediaAwareEngine(
                 new SegmentedDownloadEngine(_http) { Limiter = _limiter },
-                new Core.Engine.Hls.HlsDownloadEngine(_http) { Limiter = _limiter }),
-            prober.ProbeAsync,
+                new Core.Engine.Hls.HlsDownloadEngine(_http) { Limiter = _limiter },
+                _ytEngine),
+            (req, ct) => Core.Engine.YouTube.YouTubeLink.IsVideo(req.Url) ? Task.FromResult(YouTubeReady(req)) : prober.ProbeAsync(req, ct),
             new DownloadStore(AppPaths.DataDir),
             () => _settings,
             AppPaths.StatesDir,
             ui);
         _coordinator = new CaptureCoordinator(
-            prober.ProbeAsync,
+            (req, ct) => Core.Engine.YouTube.YouTubeLink.IsVideo(req.Url) ? ProbeYouTubeAsync(req, ct) : prober.ProbeAsync(req, ct),
             new NewDownloadDialogHost(ui, () => _settings.WarnBeforeDownload),
             _manager,
             () => new CategoryResolver(_settings.Extensions, _settings.RootFolder),
@@ -120,6 +127,73 @@ internal sealed class MainContext : ApplicationContext
             case MessageTypes.CaptureMany:
                 CaptureMany(msg, connection.SendAsync);
                 break;
+        }
+    }
+
+    // ───────────── YouTube (qua yt-dlp) ─────────────
+
+    private static ProbeResult YouTubeReady(DownloadRequest req) =>
+        new(true, Core.Engine.YouTube.YouTubeLink.Normalize(req.Url), null, true, null, null, null, "video/mp4", ProbeFailure.None, 200);
+
+    private static ProbeResult YouTubeFailed() => new(false, null, null, false, null, null, null, null, ProbeFailure.Other, null);
+
+    /// <summary>Link video YouTube vừa bắt: cài công cụ nếu cần (hỏi trước), rồi lấy tiêu đề và dung lượng để hiện hộp tải.</summary>
+    private async Task<ProbeResult> ProbeYouTubeAsync(DownloadRequest req, CancellationToken ct)
+    {
+        if (!_ytTools.Ready && !await EnsureYouTubeToolsAsync())
+            return YouTubeFailed();
+        await _ytTools.RefreshAsync(ct);
+        var (info, error) = await _ytEngine.InfoAsync(req, ct);
+        if (info is null)
+        {
+            _tray.Toast("Không tải được video YouTube", error ?? "", ToolTipIcon.Warning, null, 10);
+            return YouTubeFailed();
+        }
+        return YouTubeReady(req) with { Size = info.Size, FileName = info.Title + ".mp4" };
+    }
+
+    /// <summary>Lần đầu tải YouTube: hỏi rồi tải yt-dlp và ffmpeg (chỉ một lần, các lượt bắt cùng lúc dùng chung).</summary>
+    private Task<bool> EnsureYouTubeToolsAsync()
+    {
+        lock (_refresh)
+        {
+            if (_ytInstall is { IsCompleted: false } running)
+                return running;
+            return _ytInstall = InstallYouTubeToolsAsync();
+        }
+    }
+
+    private async Task<bool> InstallYouTubeToolsAsync()
+    {
+        var asked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ui.Post(_ =>
+        {
+            const string text = "Để tải video YouTube, DoMa cần thêm hai công cụ miễn phí, mã nguồn mở:\n\n"
+                + "• yt-dlp (khoảng 18 MB): đọc trang video YouTube\n"
+                + "• ffmpeg (khoảng 100 MB): ghép hình và tiếng thành một tệp .mp4\n\n"
+                + "DoMa sẽ tải chúng từ GitHub một lần duy nhất. Tải ngay?";
+            const string caption = "Tải video YouTube";
+            // Cửa sổ DoMa đang ẩn dưới khay: hiện hộp hỏi nổi lên trên trình duyệt.
+            var answer = _form.Visible
+                ? MessageBox.Show(_form, text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                : MessageBox.Show(text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+            asked.TrySetResult(answer == System.Windows.Forms.DialogResult.Yes);
+        }, null);
+        if (!await asked.Task)
+            return false;
+        _tray.Toast("Đang chuẩn bị tải YouTube", "Đang tải yt-dlp và ffmpeg (một lần duy nhất)…", ToolTipIcon.None, null, 8);
+        try
+        {
+            await _ytTools.InstallAsync(null, CancellationToken.None);
+            _tray.Toast("Đã sẵn sàng tải YouTube", "Đang lấy thông tin video…", ToolTipIcon.Info, null);
+            return true;
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or TaskCanceledException)
+        {
+            _log.Write("youtube-tools", e, null);
+            _tray.Toast("Không tải được công cụ YouTube", "Kiểm tra kết nối mạng rồi thử lại.", ToolTipIcon.Error, null, 10);
+            return false;
         }
     }
 

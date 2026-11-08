@@ -361,6 +361,7 @@ public class DownloadManager
             if (!deleteFiles)
                 continue;
             DeleteFile(item.TargetPath + ".part");
+            DeleteStreamParts(item);
             if (item.Status == DownloadStatus.Completed)
                 DeleteFile(item.TargetPath);
             if (run?.FinalPath is string finalPath)
@@ -390,6 +391,7 @@ public class DownloadManager
             task?.Wait();
             DeleteFile(StatePath(item));
             DeleteFile(item.TargetPath + ".part");
+            DeleteStreamParts(item);
         }
         finally
         {
@@ -448,6 +450,15 @@ public class DownloadManager
     }
 
     private string StatePath(DownloadItem item) => Path.Combine(_statesDir, $"{item.Id}.json");
+
+    /// <summary>Video YouTube: yt-dlp để lại các tệp dở riêng cho hình và tiếng (vd. "Tên.f137.mp4.part").</summary>
+    private static void DeleteStreamParts(DownloadItem item)
+    {
+        if (!Engine.YouTube.YouTubeLink.IsVideo(item.Request.Url))
+            return;
+        foreach (var path in Engine.YouTube.YouTubeDownloadEngine.PartialFiles(item.TargetPath))
+            DeleteFile(path);
+    }
 
     private static void DeleteFile(string path)
     {
@@ -528,7 +539,7 @@ public class DownloadManager
             {
                 lock (_gate)
                 {
-                    if (Engine.Hls.HlsPlaylist.Looks(probe.FinalUrl ?? run.Item.Request.Url, probe.ContentType ?? run.Item.Request.Mime))
+                    if (Engine.Hls.MediaAwareEngine.IsStream(probe.FinalUrl ?? run.Item.Request.Url, probe.ContentType ?? run.Item.Request.Mime))
                     {
                         // Luồng video: probe chỉ thấy cỡ danh sách phát; dung lượng thật được ước lượng khi tải.
                         run.Item.CanResume = true;
@@ -545,7 +556,7 @@ public class DownloadManager
                     refreshed = run.Item.LinkRefreshed;
                     run.Item.LinkRefreshed = false;
                 }
-                var isStream = Engine.Hls.HlsPlaylist.Looks(probe.FinalUrl ?? run.Item.Request.Url, probe.ContentType ?? run.Item.Request.Mime);
+                var isStream = Engine.Hls.MediaAwareEngine.IsStream(probe.FinalUrl ?? run.Item.Request.Url, probe.ContentType ?? run.Item.Request.Mime);
                 if (!isStream && SpaceShortage(run.Item, probe.Size) is { } shortage)
                 {
                     result = new EngineResult(EngineOutcome.Failed, null, shortage);
