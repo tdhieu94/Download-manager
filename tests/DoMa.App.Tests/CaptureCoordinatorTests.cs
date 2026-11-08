@@ -315,7 +315,7 @@ public sealed class CaptureCoordinatorTests : IDisposable
             }
         }
 
-        public async Task<DialogResult> ShowAsync(DownloadRequest req, ProbeResult probe, string proposedPath, Category category)
+        public async Task<DialogResult> ShowAsync(DownloadRequest req, ProbeResult probe, string proposedPath, Category category, DownloadItem? existing = null)
         {
             lock (_proposed)
             {

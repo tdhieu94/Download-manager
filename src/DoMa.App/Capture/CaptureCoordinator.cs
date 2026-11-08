@@ -13,7 +13,8 @@ public record DialogResult(DialogChoice Choice, string TargetPath);
 
 public interface IDownloadDialog
 {
-    Task<DialogResult> ShowAsync(DownloadRequest req, ProbeResult probe, string proposedPath, Category category);
+    /// <param name="existing">Tệp trùng đã có trong danh sách (đã tải hoặc đang tải), để nhắc người dùng; null nếu không trùng.</param>
+    Task<DialogResult> ShowAsync(DownloadRequest req, ProbeResult probe, string proposedPath, Category category, DownloadItem? existing = null);
 }
 
 public class CaptureCoordinator(
@@ -84,7 +85,8 @@ public class CaptureCoordinator(
         try
         {
             await reply(Messages.Reply(MessageTypes.Asking, capture.Id));
-            var choice = await dialog.ShowAsync(req, result, proposed, category);
+            var existing = Duplicates.Find(manager.Items, req.Url, result.FinalUrl, fileName, result.Size);
+            var choice = await dialog.ShowAsync(req, result, proposed, category, existing);
             if (choice.Choice == DialogChoice.Cancel)
             {
                 await reply(Messages.Reply(MessageTypes.Cancelled, capture.Id));
