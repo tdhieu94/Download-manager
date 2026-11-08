@@ -62,6 +62,12 @@ public class CaptureCoordinator(
 
         var resolver = categories();
         var fileName = FileNameResolver.Sanitize(FirstNonBlank(result.FileName, req.SuggestedFileName) ?? LastUrlSegment(req.Url));
+        // Luồng video HLS: tệp ghép ra là video .ts, không phải danh sách phát .m3u8.
+        if (Core.Engine.Hls.HlsPlaylist.Looks(result.FinalUrl ?? req.Url, result.ContentType ?? req.Mime))
+        {
+            fileName = Core.Engine.Hls.HlsDownloadEngine.WithExtension(fileName.Length > 0 ? fileName : "video", ".ts");
+            result = result with { Size = null };
+        }
         var category = resolver.Resolve(fileName);
         var proposed = Reserve(Path.Combine(resolver.FolderFor(category), fileName));
         try

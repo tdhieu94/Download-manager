@@ -46,7 +46,9 @@ internal sealed class MainContext : ApplicationContext
 
         var prober = new LinkProber(_http);
         _manager = new DownloadManager(
-            new SegmentedDownloadEngine(_http) { Limiter = _limiter },
+            new Core.Engine.Hls.MediaAwareEngine(
+                new SegmentedDownloadEngine(_http) { Limiter = _limiter },
+                new Core.Engine.Hls.HlsDownloadEngine(_http) { Limiter = _limiter }),
             prober.ProbeAsync,
             new DownloadStore(AppPaths.DataDir),
             () => _settings,

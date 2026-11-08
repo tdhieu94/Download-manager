@@ -130,16 +130,16 @@ export function contextUrl(info) {
   return null;
 }
 
-export function toManualCaptureMessage(id, url, pageUrl, cookies, userAgent) {
+export function toManualCaptureMessage(id, url, pageUrl, cookies, userAgent, filename = "", mime = null, fileSize = null) {
   return {
     type: "bat",
     id,
     url,
     finalUrl: null,
     referrer: /^https?:\/\//i.test(String(pageUrl ?? "")) ? pageUrl : null,
-    filename: "",
-    mime: null,
-    fileSize: null,
+    filename,
+    mime,
+    fileSize,
     cookies,
     userAgent,
   };
@@ -150,6 +150,78 @@ export function decideManualReply(type) {
   if (type === "dang_hoi") return "markAsking";
   if (type === "tra_lai") return "fallback";
   return "done";
+}
+
+// ── Bắt video / âm thanh đang phát trên trang ──
+const HLS_TYPES = ["application/vnd.apple.mpegurl", "application/x-mpegurl", "audio/mpegurl", "audio/x-mpegurl"];
+const SEGMENT_TYPES = ["video/mp2t", "video/iso.segment", "audio/iso.segment"];
+const MEDIA_EXTS = ["mp4", "webm", "mkv", "mov", "m4v", "avi", "flv", "mp3", "m4a", "flac", "ogg", "wav", "opus", "aac"];
+const SEGMENT_EXTS = ["ts", "m4s", "m4v-seg"];
+// Trang dùng cơ chế phát riêng (tách hình/tiếng theo từng khúc nhỏ), không tải thành một tệp được.
+const UNSUPPORTED_HOSTS = ["googlevideo.com", "youtube.com", "netflix.com", "nflxvideo.net"];
+export const MIN_MEDIA_BYTES = 300 * 1024;
+export const MAX_MEDIA_PER_TAB = 30;
+
+function extOf(pathname) {
+  const last = pathname.slice(pathname.lastIndexOf("/") + 1);
+  const dot = last.lastIndexOf(".");
+  return dot > 0 ? last.slice(dot + 1).toLowerCase() : "";
+}
+
+/** Tổng dung lượng từ header: ưu tiên phần sau "/" của Content-Range (phản hồi 206), rồi Content-Length. */
+export function totalFromHeaders(headers) {
+  const get = (name) => headers?.find((h) => h.name.toLowerCase() === name)?.value ?? null;
+  const range = /\/(\d+)\s*$/.exec(get("content-range") ?? "");
+  if (range) return Number(range[1]);
+  const length = Number(get("content-length"));
+  return Number.isFinite(length) && length > 0 ? length : null;
+}
+
+/**
+ * Phản hồi này có phải video/âm thanh tải được không?
+ * Trả về { kind: "hls" } cho luồng .m3u8, { kind: "file", ext } cho tệp media, hoặc null.
+ */
+export function classifyMedia(url, contentType, size) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(parsed.protocol)) return null;
+  const host = parsed.hostname.toLowerCase();
+  if (UNSUPPORTED_HOSTS.some((h) => host === h || host.endsWith("." + h))) return null;
+  const type = String(contentType ?? "").split(";")[0].trim().toLowerCase();
+  const ext = extOf(parsed.pathname);
+  if (HLS_TYPES.includes(type) || ext === "m3u8") return { kind: "hls" };
+  if (SEGMENT_TYPES.includes(type) || SEGMENT_EXTS.includes(ext)) return null;
+  const isMedia = /^(video|audio)\//.test(type) || MEDIA_EXTS.includes(ext);
+  if (!isMedia) return null;
+  if (size != null && size < MIN_MEDIA_BYTES) return null;
+  const fromType = /^(?:video|audio)\/(?:x-)?([a-z0-9]+)/.exec(type)?.[1];
+  const guess = MEDIA_EXTS.includes(ext) ? ext : fromType === "mpeg" ? "mp3" : MEDIA_EXTS.includes(fromType) ? fromType : "mp4";
+  return { kind: "file", ext: guess };
+}
+
+/** Tên tệp gợi ý: tiêu đề trang (bỏ ký tự cấm) + đuôi phù hợp. */
+export function mediaFileName(title, url, media) {
+  let base = String(title ?? "").replace(/[<>:"\/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+  if (!base) {
+    try {
+      const last = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+      base = last.replace(/\.[^.]*$/, "") || "video";
+    } catch {
+      base = "video";
+    }
+  }
+  return `${base}.${media.kind === "hls" ? "ts" : media.ext}`;
+}
+
+/** Thêm vào danh sách media của một tab: bỏ trùng theo link, giữ tối đa MAX_MEDIA_PER_TAB mục mới nhất. */
+export function addMedia(list, entry) {
+  const next = (list ?? []).filter((m) => m.url !== entry.url);
+  next.unshift(entry);
+  return next.slice(0, MAX_MEDIA_PER_TAB);
 }
 
 // ── "Tải tất cả link bằng DoMa" ──

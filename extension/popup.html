@@ -4,16 +4,36 @@
 <meta charset="utf-8">
 <title>Download Manager (DoMa)</title>
 <style>
-body { font: 13px Segoe UI, sans-serif; width: 240px; margin: 12px; }
-#status { margin-bottom: 10px; font-weight: 600; }
-#status.on { color: #2e7d32; }
-#status.off { color: #c62828; }
-label { display: flex; align-items: center; gap: 6px; }
+:root { --bg: #ffffff; --text: #1f2937; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb; --soft: #eff6ff; --ok: #15803d; --bad: #b91c1c; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1b1f27; --text: #e5e7eb; --muted: #9ca3af; --line: #2f3542; --accent: #3b82f6; --soft: #1e2a44; --ok: #4ade80; --bad: #f87171; }
+}
+body { font: 13px "Segoe UI", system-ui, sans-serif; width: 340px; margin: 0; background: var(--bg); color: var(--text); }
+header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+#status { font-weight: 600; }
+#status.on { color: var(--ok); }
+#status.off { color: var(--bad); }
+label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+h2 { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 12px 14px 6px; }
+#media { list-style: none; margin: 0; padding: 0 8px 10px; max-height: 340px; overflow-y: auto; }
+#media li { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 8px; }
+#media li:hover { background: var(--soft); }
+.info { flex: 1; min-width: 0; }
+.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+button { border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: 600 12px "Segoe UI", system-ui, sans-serif; padding: 6px 12px; cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+#empty { color: var(--muted); padding: 4px 14px 14px; margin: 0; }
 </style>
 </head>
 <body>
-<div id="status">Đang kiểm tra…</div>
-<label><input type="checkbox" id="enabled" checked> Bắt link</label>
+<header>
+  <div id="status">Đang kiểm tra…</div>
+  <label><input type="checkbox" id="enabled" checked> Bắt link</label>
+</header>
+<h2>Video và âm thanh trên trang này</h2>
+<ul id="media"></ul>
+<p id="empty">Chưa thấy video nào. Hãy bấm phát video trên trang rồi mở lại.</p>
 <script src="popup.js" type="module"></script>
 </body>
 </html>

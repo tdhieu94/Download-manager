@@ -371,8 +371,16 @@ public class DownloadManager
             {
                 lock (_gate)
                 {
-                    run.Item.TotalBytes = probe.Size ?? run.Item.TotalBytes;
-                    run.Item.CanResume = probe.SupportsRange && probe.Size is not null;
+                    if (Engine.Hls.HlsPlaylist.Looks(probe.FinalUrl ?? run.Item.Request.Url, probe.ContentType ?? run.Item.Request.Mime))
+                    {
+                        // Luồng video: probe chỉ thấy cỡ danh sách phát; dung lượng thật được ước lượng khi tải.
+                        run.Item.CanResume = true;
+                    }
+                    else
+                    {
+                        run.Item.TotalBytes = probe.Size ?? run.Item.TotalBytes;
+                        run.Item.CanResume = probe.SupportsRange && probe.Size is not null;
+                    }
                 }
                 var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe);
                 result = await _engine.RunAsync(job, run, run.Cts.Token);

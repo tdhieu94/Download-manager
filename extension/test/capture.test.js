@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage } from "../capture.js";
+import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage, classifyMedia, totalFromHeaders, mediaFileName, addMedia, MAX_MEDIA_PER_TAB } from "../capture.js";
 
 const base = { id: 1, url: "https://example.com/a.zip", state: "in_progress", incognito: false };
 const on = { enabled: true };
@@ -230,4 +230,35 @@ test("batch message drops non-http referrer", () => {
   const msg = toBatchMessage("m1", "chrome://newtab", [], {}, "UA");
   assert.equal(msg.type, "bat_nhieu");
   assert.equal(msg.referrer, null);
+});
+
+test("classifies streams, media files, and skips segments and tiny files", () => {
+  assert.deepEqual(classifyMedia("https://cdn.a.com/v/index.m3u8?t=1", "text/plain"), { kind: "hls" });
+  assert.deepEqual(classifyMedia("https://cdn.a.com/play", "application/vnd.apple.mpegurl"), { kind: "hls" });
+  assert.deepEqual(classifyMedia("https://a.com/clip.webm", "video/webm", 5_000_000), { kind: "file", ext: "webm" });
+  assert.deepEqual(classifyMedia("https://a.com/stream", "audio/mpeg", null), { kind: "file", ext: "mp3" });
+  assert.equal(classifyMedia("https://a.com/seg-12.ts", "video/mp2t", 900_000), null);
+  assert.equal(classifyMedia("https://a.com/thumb.mp4", "video/mp4", 20_000), null);
+  assert.equal(classifyMedia("https://rr1.googlevideo.com/videoplayback?x", "video/mp4", 9_000_000), null);
+  assert.equal(classifyMedia("https://a.com/page", "text/html", 1_000_000), null);
+});
+
+test("total size prefers Content-Range total", () => {
+  assert.equal(totalFromHeaders([{ name: "Content-Range", value: "bytes 0-1/12345" }, { name: "Content-Length", value: "2" }]), 12345);
+  assert.equal(totalFromHeaders([{ name: "content-length", value: "77" }]), 77);
+  assert.equal(totalFromHeaders([]), null);
+});
+
+test("media file name comes from page title", () => {
+  assert.equal(mediaFileName("Phim: Tập 1 / HD", "https://a/x.m3u8", { kind: "hls" }), "Phim Tập 1 HD.ts");
+  assert.equal(mediaFileName("", "https://a/b/song%20one.mp3", { kind: "file", ext: "mp3" }), "song one.mp3");
+});
+
+test("media list dedupes and keeps newest first, capped", () => {
+  let list = [];
+  for (let i = 0; i < MAX_MEDIA_PER_TAB + 5; i++) list = addMedia(list, { url: `u${i}` });
+  list = addMedia(list, { url: "u10" });
+  assert.equal(list.length, MAX_MEDIA_PER_TAB);
+  assert.equal(list[0].url, "u10");
+  assert.equal(list.filter((m) => m.url === "u10").length, 1);
 });

@@ -2,6 +2,7 @@ import {
   shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, shouldReload,
   manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply,
   collectPageLinks, prepareBatch, hostsOf, toBatchMessage,
+  classifyMedia, totalFromHeaders, mediaFileName, addMedia,
 } from "./capture.js";
 
 const HOST_NAME = "com.doma.host";
@@ -311,6 +312,89 @@ async function captureAll(tab, pageUrl) {
   }
 }
 
+// ── Bắt video / âm thanh đang phát ──
+const mediaKey = (tabId) => `media:${tabId}`;
+
+async function mediaOf(tabId) {
+  return (await chrome.storage.session.get({ [mediaKey(tabId)]: [] }))[mediaKey(tabId)];
+}
+
+async function setMedia(tabId, list) {
+  if (list.length === 0) await chrome.storage.session.remove(mediaKey(tabId));
+  else await chrome.storage.session.set({ [mediaKey(tabId)]: list });
+  try {
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: "#2563eb" });
+    await chrome.action.setBadgeText({ tabId, text: list.length ? String(list.length) : "" });
+  } catch {
+  }
+}
+
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    if (details.tabId < 0 || details.statusCode >= 400) return;
+    const headers = details.responseHeaders ?? [];
+    const type = headers.find((h) => h.name.toLowerCase() === "content-type")?.value ?? "";
+    const size = totalFromHeaders(headers);
+    const media = classifyMedia(details.url, type, size);
+    if (!media) return;
+    (async () => {
+      let title = "";
+      let pageUrl = details.initiator ?? details.originUrl ?? null;
+      try {
+        const tab = await chrome.tabs.get(details.tabId);
+        title = tab.title ?? "";
+        pageUrl = tab.url ?? pageUrl;
+      } catch {
+      }
+      const entry = {
+        url: details.url,
+        kind: media.kind,
+        mime: type.split(";")[0].trim() || null,
+        size: media.kind === "hls" ? null : size,
+        name: mediaFileName(title, details.url, media),
+        pageUrl,
+        at: Date.now(),
+      };
+      await setMedia(details.tabId, addMedia(await mediaOf(details.tabId), entry));
+    })().catch(() => {});
+  },
+  { urls: ["<all_urls>"], types: ["media", "xmlhttprequest", "other"] },
+  ["responseHeaders"],
+);
+
+// Sang trang khác hoặc đóng tab: xoá danh sách video của tab đó.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.url) setMedia(tabId, []).catch(() => {});
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.session.remove(mediaKey(tabId)).catch(() => {});
+});
+
+async function captureMedia(entry) {
+  capturing++;
+  const id = manualId(`${Date.now()}-${++manualCounter}`);
+  try {
+    let activePort;
+    try {
+      activePort = await connect();
+    } catch {
+      return false;
+    }
+    const cookies = await buildCookies(entry.url);
+    manual.set(id, entry.kind === "hls" ? null : entry.url);
+    pending.add(id);
+    activePort.postMessage(toManualCaptureMessage(id, entry.url, entry.pageUrl, cookies, navigator.userAgent, entry.name, entry.mime, entry.size));
+    return true;
+  } catch {
+    pending.take(id);
+    manual.delete(id);
+    return false;
+  } finally {
+    capturing--;
+    maybeReload();
+  }
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU_ALL_ID) {
     captureAll(tab, info.pageUrl || tab?.url);
@@ -322,6 +406,17 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === "media-list") {
+    mediaOf(msg.tabId).then(sendResponse, () => sendResponse([]));
+    return true;
+  }
+  if (msg?.type === "media-download") {
+    mediaOf(msg.tabId)
+      .then((list) => list.find((m) => m.url === msg.url))
+      .then((entry) => (entry ? captureMedia(entry) : false))
+      .then((ok) => sendResponse({ ok }), () => sendResponse({ ok: false }));
+    return true;
+  }
   if (msg?.type !== "status") return false;
   connect().then(
     () => sendResponse({ connected: true }),
