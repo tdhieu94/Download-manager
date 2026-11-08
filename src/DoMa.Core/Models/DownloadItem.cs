@@ -17,6 +17,13 @@ public class DownloadItem
 
     /// <summary>Vừa được thay link mới (link cũ hết hạn): lần tải tiếp chỉ cần dung lượng khớp là nối tiếp được.</summary>
     public bool LinkRefreshed { get; set; }
+    /// <summary>Lỗi lần trước do mất mạng: DoMa tự tải tiếp khi có mạng lại.</summary>
+    public bool NetworkError { get; set; }
+
+    /// <summary>Số lần đã tự tải tiếp liên tiếp sau lỗi mạng và thời điểm được thử lần tới (không lưu).</summary>
+    public int AutoRetries { get; set; }
+    public DateTimeOffset? NextAutoRetry { get; set; }
+
     public DateTimeOffset AddedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
 }

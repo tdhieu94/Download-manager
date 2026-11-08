@@ -18,7 +18,8 @@ public class DownloadStore(string dataDir)
         string? ErrorMessage,
         DateTimeOffset AddedAt,
         DateTimeOffset? CompletedAt,
-        string? Threat = null);
+        string? Threat = null,
+        bool NetworkError = false);
 
     string FilePath => Path.Combine(dataDir, "downloads.json");
 
@@ -48,6 +49,7 @@ public class DownloadStore(string dataDir)
             AddedAt = s.AddedAt,
             CompletedAt = s.CompletedAt,
             Threat = s.Threat,
+            NetworkError = s.NetworkError,
         }).ToList();
     }
 
@@ -86,7 +88,8 @@ public class DownloadStore(string dataDir)
             i.ErrorMessage,
             i.AddedAt,
             i.CompletedAt,
-            i.Threat)).ToList();
+            i.Threat,
+            i.NetworkError)).ToList();
         JsonFile.Write(FilePath, stored);
     }
 }

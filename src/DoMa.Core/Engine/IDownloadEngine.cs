@@ -12,7 +12,8 @@ public enum EngineOutcome
     NeedsRestart,
 }
 
-public record EngineResult(EngineOutcome Outcome, string? FinalPath, string? ErrorMessage);
+/// <param name="Network">Lỗi do mất mạng / không tới được máy chủ: tự tải tiếp được khi có mạng lại.</param>
+public record EngineResult(EngineOutcome Outcome, string? FinalPath, string? ErrorMessage, bool Network = false);
 
 public record DownloadJob(DownloadRequest Request, string TargetPath, string StatePath, int Connections, ProbeResult Probe, bool LinkRefreshed = false);
 

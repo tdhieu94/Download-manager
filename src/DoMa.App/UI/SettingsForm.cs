@@ -25,6 +25,7 @@ public sealed class SettingsForm : Form
     private readonly ToggleSwitch _mp4 = new("Tự chuyển video .ts sang .mp4", "Video tải từ luồng (HLS) được đổi sang .mp4 để mở trên mọi máy, không giảm chất lượng");
     private readonly ToggleSwitch _extract = new("Tự giải nén tệp .zip", "Giải nén vào thư mục cùng tên, cạnh tệp vừa tải");
     private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
+    private readonly ToggleSwitch _network = new("Tự tải tiếp khi có mạng lại", "Tệp bị lỗi vì mất mạng sẽ tự chạy tiếp, không cần bấm lại");
     private readonly ToggleSwitch _clipboard = new("Bắt link khi copy", "Copy một link tải (.zip, .exe, .mp4…) là DoMa đề nghị tải giúp");
     private readonly ToggleSwitch _notify = new("Thông báo khi tải xong", "Hiện thông báo ở góc màn hình khi một tệp tải xong");
     private readonly ToggleSwitch _updates = new("Tự động kiểm tra cập nhật", "Báo khi có phiên bản DoMa mới trên GitHub");
@@ -160,8 +161,10 @@ public sealed class SettingsForm : Form
         _updates.SetBounds(x, y, w, S(46));
         y += S(50);
         _clipboard.SetBounds(x, y, w, S(46));
+        y += S(50);
+        _network.SetBounds(x, y, w, S(46));
         y += S(52);
-        body.Controls.AddRange([_startup, _notify, _updates, _clipboard]);
+        body.Controls.AddRange([_startup, _notify, _updates, _clipboard, _network]);
         body.AutoScrollMinSize = new Size(0, y);
 
         Controls.Add(body);
@@ -176,6 +179,7 @@ public sealed class SettingsForm : Form
         _startup.Checked = current.RunAtStartup;
         _notify.Checked = current.NotifyOnComplete;
         _clipboard.Checked = current.WatchClipboard;
+        _network.Checked = current.AutoResumeOnNetwork;
         _updates.Checked = current.AutoCheckUpdates;
         _appearance.SelectedIndex = Math.Max(0, Array.FindIndex(Appearances, a => string.Equals(a.Value, current.Appearance, StringComparison.OrdinalIgnoreCase)));
         _warn.Checked = current.WarnBeforeDownload;
@@ -239,6 +243,7 @@ public sealed class SettingsForm : Form
             RunAtStartup = _startup.Checked,
             NotifyOnComplete = _notify.Checked,
             WatchClipboard = _clipboard.Checked,
+            AutoResumeOnNetwork = _network.Checked,
             AutoCheckUpdates = _updates.Checked,
             SpeedLimitKBps = (int)_speed.Value,
             WarnBeforeDownload = _warn.Checked,

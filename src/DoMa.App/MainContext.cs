@@ -30,6 +30,7 @@ internal sealed class MainContext : ApplicationContext
     private readonly Capture.ClipboardWatcher _clipboard;
     private readonly BandwidthLimiter _limiter = new();
     private readonly RefreshWatch _refresh = new();
+    private readonly System.Windows.Forms.Timer _networkTimer = new() { Interval = 30_000 };
     private readonly ScheduleService _schedule;
     private volatile Settings _settings;
     private bool _exited;
@@ -97,6 +98,7 @@ internal sealed class MainContext : ApplicationContext
             _form.Show();
         ResumeAfterUpdate();
         _updates.Start();
+        StartNetworkWatch();
     }
 
     public void OnMessage(PipeConnection connection, JsonNode msg)
@@ -301,8 +303,34 @@ internal sealed class MainContext : ApplicationContext
     {
         _lastStatus.TryGetValue(item.Id, out var previous);
         _lastStatus[item.Id] = item.Status;
-        if (item.Status == DownloadStatus.Failed && previous != DownloadStatus.Failed)
-            _tray.Toast("Tải lỗi", Path.GetFileName(item.TargetPath), ToolTipIcon.Error, ShowNow);
+        if (item.Status != DownloadStatus.Failed || previous == DownloadStatus.Failed)
+            return;
+        if (item.NetworkError && _settings.AutoResumeOnNetwork)
+        {
+            // Chỉ báo lần đầu; các lần tự thử lại sau đó không báo nữa cho đỡ phiền.
+            if (item.AutoRetries == 0)
+                _tray.Toast("Mất kết nối", $"{Path.GetFileName(item.TargetPath)} · DoMa sẽ tự tải tiếp khi có mạng lại", ToolTipIcon.Warning, ShowNow);
+            return;
+        }
+        _tray.Toast("Tải lỗi", Path.GetFileName(item.TargetPath), ToolTipIcon.Error, ShowNow);
+    }
+
+    /// <summary>Có mạng lại thì cho chạy tiếp ngay các tệp lỗi vì mất mạng; ngoài ra cứ 30 giây xem có tệp nào tới lượt thử lại.</summary>
+    private void StartNetworkWatch()
+    {
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailability;
+        _networkTimer.Tick += (_, _) =>
+        {
+            if (_settings.AutoResumeOnNetwork && System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
+                _manager.ResumeNetworkFailures();
+        };
+        _networkTimer.Start();
+    }
+
+    private void OnNetworkAvailability(object? sender, System.Net.NetworkInformation.NetworkAvailabilityEventArgs e)
+    {
+        if (e.IsAvailable && _settings.AutoResumeOnNetwork && !_exited)
+            _manager.ResumeNetworkFailures(now: true);
     }
 
     private void OnCompleted(DownloadItem item)
@@ -477,6 +505,8 @@ internal sealed class MainContext : ApplicationContext
             while (DateTime.UtcNow < deadline && _manager.Items.Any(i => i.Status == DownloadStatus.Downloading))
                 Thread.Sleep(50);
         }
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailability;
+        _networkTimer.Dispose();
         _updates.Dispose();
         _clipboard.Dispose();
         _schedule.Dispose();

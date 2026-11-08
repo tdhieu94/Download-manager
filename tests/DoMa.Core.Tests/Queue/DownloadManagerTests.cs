@@ -418,6 +418,67 @@ public sealed class DownloadManagerTests : IDisposable
     }
 
     [Fact]
+    public void network_failure_resumes_after_backoff()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Failed, null, "mất mạng", Network: true));
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed);
+        Assert.True(m.Items.Single().NetworkError);
+
+        Assert.Equal(0, m.ResumeNetworkFailures());
+        _time.Advance(TimeSpan.FromSeconds(31));
+        Assert.Equal(1, m.ResumeNetworkFailures());
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+        Assert.Equal(2, _engine.Runs);
+    }
+
+    [Fact]
+    public void network_back_resumes_immediately_but_not_other_failures()
+    {
+        var m = Manager();
+        var net = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        var other = m.Add(Req("https://h/b"), Target("b.bin"), true);
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Failed, null, "mất mạng", Network: true));
+        _engine.Finish("https://h/b", new EngineResult(EngineOutcome.Failed, null, "Máy chủ trả lỗi 500"));
+        WaitUntil(() => StatusOf(m, net.Id) == DownloadStatus.Failed && StatusOf(m, other.Id) == DownloadStatus.Failed);
+
+        Assert.Equal(1, m.ResumeNetworkFailures(now: true));
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+        Assert.Equal(DownloadStatus.Failed, StatusOf(m, other.Id));
+    }
+
+    [Fact]
+    public void network_auto_resume_stops_after_max_tries()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        for (var i = 0; i <= DownloadManager.MaxAutoRetries; i++)
+        {
+            _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Failed, null, "mất mạng", Network: true));
+            WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed && !_engine.Pending.ContainsKey("https://h/a"));
+            if (i < DownloadManager.MaxAutoRetries)
+                Assert.Equal(1, m.ResumeNetworkFailures(now: true));
+        }
+        Assert.Equal(0, m.ResumeNetworkFailures(now: true));
+
+        m.Resume([item.Id]);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+        Assert.Equal(0, m.Items.Single().AutoRetries);
+    }
+
+    [Fact]
+    public void network_error_flag_is_saved()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Failed, null, "mất mạng", Network: true));
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed);
+
+        Assert.True(new DownloadStore(_dir).Load().Single().NetworkError);
+    }
+
+    [Fact]
     public void replace_link_requeues_failed_item_with_new_url()
     {
         var m = Manager();

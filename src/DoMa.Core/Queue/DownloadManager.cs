@@ -104,12 +104,45 @@ public class DownloadManager
                 }
                 if (item.Status is not (DownloadStatus.Later or DownloadStatus.Paused or DownloadStatus.Failed))
                     continue;
+                item.AutoRetries = 0;
                 item.Status = DownloadStatus.Queued;
                 item.ErrorMessage = null;
                 Raise(Changed, item);
             }
             Persist();
             Pump();
+        }
+    }
+
+    /// <summary>Số lần tự tải tiếp tối đa cho một tệp sau lỗi mạng (sau đó chờ người dùng bấm).</summary>
+    public const int MaxAutoRetries = 8;
+
+    /// <summary>
+    /// Có mạng (lại): cho chạy tiếp các tệp lỗi vì mất mạng. Mặc định chỉ những tệp đã tới lượt thử
+    /// (lùi dần giữa các lần); <paramref name="now"/> = true khi vừa có mạng lại thì thử ngay. Trả về số tệp được chạy lại.
+    /// </summary>
+    public int ResumeNetworkFailures(bool now = false)
+    {
+        lock (_gate)
+        {
+            var at = _time.GetUtcNow();
+            var due = _items.Where(i => i is { Status: DownloadStatus.Failed, NetworkError: true }
+                                        && i.AutoRetries < MaxAutoRetries
+                                        && !_running.ContainsKey(i.Id)
+                                        && (now || i.NextAutoRetry is null || i.NextAutoRetry <= at)).ToList();
+            foreach (var item in due)
+            {
+                item.AutoRetries++;
+                item.Status = DownloadStatus.Queued;
+                item.ErrorMessage = null;
+                Raise(Changed, item);
+            }
+            if (due.Count > 0)
+            {
+                Persist();
+                Pump();
+            }
+            return due.Count;
         }
     }
 
@@ -403,7 +436,7 @@ public class DownloadManager
             var probe = await _probe(run.Item.Request, run.Cts.Token);
             if (!probe.Ok)
             {
-                result = new EngineResult(EngineOutcome.Failed, null, ProbeMessage(probe));
+                result = new EngineResult(EngineOutcome.Failed, null, ProbeMessage(probe), probe.Failure == ProbeFailure.Network);
             }
             else
             {
@@ -436,7 +469,7 @@ public class DownloadManager
         }
         catch (Exception ex)
         {
-            result = new EngineResult(EngineOutcome.Failed, null, ex.Message);
+            result = new EngineResult(EngineOutcome.Failed, null, ex.Message, ex is HttpRequestException);
         }
         Finish(run, result);
     }
@@ -490,6 +523,18 @@ public class DownloadManager
                     item.Status = DownloadStatus.Failed;
                     item.ErrorMessage = result.ErrorMessage;
                     break;
+            }
+            item.NetworkError = result.Outcome == EngineOutcome.Failed && result.Network;
+            if (item.NetworkError)
+            {
+                // Lùi dần: 30 giây, 1, 2, 4… phút (tối đa 10 phút) giữa các lần tự tải tiếp.
+                var wait = TimeSpan.FromSeconds(Math.Min(600, 30 * Math.Pow(2, Math.Min(item.AutoRetries, 5))));
+                item.NextAutoRetry = _time.GetUtcNow() + wait;
+            }
+            else if (result.Outcome != EngineOutcome.Paused)
+            {
+                item.AutoRetries = 0;
+                item.NextAutoRetry = null;
             }
             Persist();
             Raise(Changed, item);

@@ -103,6 +103,7 @@ public sealed class ResumeTests : IDisposable
         var failed = await Download(await Job(server, connections: 2), progress: progress);
         Assert.Equal(EngineOutcome.Failed, failed.Outcome);
         Assert.StartsWith("Lỗi mạng", failed.ErrorMessage);
+        Assert.True(failed.Network);
         server.Options.FailAfterBytes = null;
         server.Options.ChunkDelay = TimeSpan.Zero;
         var sentBefore = server.BytesSent;

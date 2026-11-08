@@ -52,7 +52,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
             if (outcome != EngineOutcome.Completed)
             {
                 run.SaveState();
-                return new EngineResult(outcome, null, error);
+                return new EngineResult(outcome, null, error, outcome == EngineOutcome.Failed && error == NetworkMessage);
             }
 
             var finalPath = FileNameResolver.MakeUnique(job.TargetPath, p => File.Exists(p) || Directory.Exists(p));
@@ -367,8 +367,10 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         WriteFailedException w => WriteError(w.InnerException!, partPath),
         HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone } => "Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp",
         HttpRequestException { StatusCode: { } code } => $"Máy chủ trả lỗi {(int)code}",
-        _ => "Lỗi mạng, đã thử lại nhiều lần nhưng không tải được",
+        _ => NetworkMessage,
     };
+
+    private const string NetworkMessage = "Lỗi mạng, đã thử lại nhiều lần nhưng không tải được";
 
     private static string WriteError(Exception ex, string path) =>
         (ex.HResult & 0xFFFF) is 112 or 39

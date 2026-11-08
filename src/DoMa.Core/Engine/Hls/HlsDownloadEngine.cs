@@ -45,15 +45,16 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             var outcome = EngineOutcome.Completed;
             string? error = null;
+            var network = false;
             await using (var file = new FileStream(partPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read, 1 << 16, true))
             {
                 file.SetLength(state.Bytes);
                 file.Seek(state.Bytes, SeekOrigin.Begin);
-                (outcome, error) = await TransferAsync(job, units, state, file, progress, pauseToken);
+                (outcome, error, network) = await TransferAsync(job, units, state, file, progress, pauseToken);
             }
             state.Save(job.StatePath);
             if (outcome != EngineOutcome.Completed)
-                return new EngineResult(outcome, null, error);
+                return new EngineResult(outcome, null, error, network);
 
             var target = WithExtension(job.TargetPath, playlist.Extension);
             var finalPath = FileNameResolver.MakeUnique(target, p => File.Exists(p) || Directory.Exists(p));
@@ -67,7 +68,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
         }
         catch (HlsException ex)
         {
-            return new EngineResult(EngineOutcome.Failed, null, ex.Message);
+            return new EngineResult(EngineOutcome.Failed, null, ex.Message, ex.Network);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -75,7 +76,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
         }
     }
 
-    private async Task<(EngineOutcome, string?)> TransferAsync(DownloadJob job, List<(Uri Uri, HlsSegment? Segment)> units,
+    private async Task<(EngineOutcome, string?, bool)> TransferAsync(DownloadJob job, List<(Uri Uri, HlsSegment? Segment)> units,
         HlsState state, FileStream file, IProgress<EngineProgress> progress, CancellationToken ct)
     {
         var window = Math.Clamp(job.Connections, 1, 6);
@@ -102,17 +103,17 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
                 var estimate = state.Done < units.Count ? state.Bytes * units.Count / Math.Max(1, state.Done) : state.Bytes;
                 progress.Report(new EngineProgress(state.Bytes, estimate, Math.Min(window, units.Count - state.Done + 1)));
             }
-            return (EngineOutcome.Completed, null);
+            return (EngineOutcome.Completed, null, false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             await DrainAsync(queue);
-            return (EngineOutcome.Paused, null);
+            return (EngineOutcome.Paused, null, false);
         }
         catch (HlsException ex)
         {
             await DrainAsync(queue);
-            return (EngineOutcome.Failed, ex.Message);
+            return (EngineOutcome.Failed, ex.Message, ex.Network);
         }
     }
 
@@ -204,7 +205,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
                                        || (ex is OperationCanceledException && !ct.IsCancellationRequested))
             {
                 if (attempt >= MaxAttempts)
-                    throw new HlsException("Mất kết nối khi tải video. Bấm tải tiếp để thử lại.");
+                    throw new HlsException("Mất kết nối khi tải video. Bấm tải tiếp để thử lại.", network: true);
                 await _delay(TimeSpan.FromSeconds(Math.Min(10, attempt * 2)), ct);
             }
         }
@@ -220,7 +221,10 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             : path + extension;
     }
 
-    private sealed class HlsException(string message) : Exception(message);
+    private sealed class HlsException(string message, bool network = false) : Exception(message)
+    {
+        public bool Network { get; } = network;
+    }
 
     private sealed class HlsState
     {

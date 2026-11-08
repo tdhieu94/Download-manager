@@ -25,6 +25,9 @@ public class Settings
     /// <summary>Khi copy một link tải (vd. .zip, .exe, .mp4), hiện thông báo đề nghị tải bằng DoMa.</summary>
     public bool WatchClipboard { get; set; } = true;
 
+    /// <summary>Tệp lỗi vì mất mạng được tự tải tiếp khi có mạng lại.</summary>
+    public bool AutoResumeOnNetwork { get; set; } = true;
+
     /// <summary>Cảnh báo trong hộp "Tải xuống mới" khi tệp có dấu hiệu nguy hiểm.</summary>
     public bool WarnBeforeDownload { get; set; } = true;
 
