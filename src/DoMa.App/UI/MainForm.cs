@@ -742,6 +742,11 @@ public sealed class MainForm : Form
         var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
         var mp4 = ThemedRenderer.Item(menu, "Chuyển sang MP4", IconKind.Refresh, (_, _) => ForFirst(i => ConvertToMp4?.Invoke(i)));
         menu.Items.Add(new ToolStripSeparator());
+        var startFirst = ThemedRenderer.Item(menu, "Tải trước", IconKind.Play, (_, _) =>
+        {
+            var ids = SelectedIds();
+            RunLogged(() => _manager.StartFirst(ids));
+        });
         var refresh = ThemedRenderer.Item(menu, "Làm mới link…", IconKind.Link, (_, _) => ForFirst(RefreshLink));
         ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
         {
@@ -765,6 +770,7 @@ public sealed class MainForm : Form
             extract.Enabled = done;
             mp4.Visible = first is not null && Core.PostProcess.TsToMp4.CanConvert(first.TargetPath);
             mp4.Enabled = done;
+            startFirst.Visible = SelectedIds().Any(id => _manager.Items.FirstOrDefault(i => i.Id == id) is { Status: not (DownloadStatus.Completed or DownloadStatus.Downloading) });
             refresh.Visible = first is not null && first.Status != DownloadStatus.Completed;
             refresh.Enabled = first is { Status: not DownloadStatus.Downloading };
         };

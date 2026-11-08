@@ -423,6 +423,45 @@ public sealed class DownloadManagerTests : IDisposable
     }
 
     [Fact]
+    public void start_first_jumps_queue_and_bumps_last_running()
+    {
+        _settings.MaxConcurrent = 2;
+        var m = Manager();
+        m.Add(Req("https://h/a"), Target("a.bin"), true);
+        var b = m.Add(Req("https://h/b"), Target("b.bin"), true);
+        m.Add(Req("https://h/c"), Target("c.bin"), true);
+        var d = m.Add(Req("https://h/d"), Target("d.bin"), false);
+        WaitUntil(() => _engine.Pending.Count == 2);
+
+        m.StartFirst([d.Id]);
+
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/d"));
+        Assert.True(_engine.Pending.ContainsKey("https://h/a"));
+        Assert.Equal(DownloadStatus.Queued, StatusOf(m, b.Id));
+        Assert.Equal(DownloadStatus.Queued, m.Items.Single(i => i.Request.Url == "https://h/c").Status);
+
+        // Tệp bị nhường được tải tiếp trước tệp c (vẫn đứng trước trong hàng).
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Completed, Target("a.bin"), null));
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/b"));
+    }
+
+    [Fact]
+    public void start_first_with_free_slot_does_not_bump()
+    {
+        _settings.MaxConcurrent = 2;
+        var m = Manager();
+        m.Add(Req("https://h/a"), Target("a.bin"), true);
+        var later = m.Add(Req("https://h/b"), Target("b.bin"), false);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+
+        m.StartFirst([later.Id]);
+
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/b"));
+        Assert.True(_engine.Pending.ContainsKey("https://h/a"));
+        Assert.Equal(2, _engine.Runs);
+    }
+
+    [Fact]
     public void fails_early_when_disk_is_too_small()
     {
         _probe = _probe with { Size = 100L << 20 };

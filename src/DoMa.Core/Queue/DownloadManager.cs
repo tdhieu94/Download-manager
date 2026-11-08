@@ -114,6 +114,45 @@ public class DownloadManager
         }
     }
 
+    /// <summary>
+    /// "Tải trước": đưa các tệp lên đầu hàng đợi và cho chạy ngay. Nếu đã đủ số tệp tải cùng lúc, tạm nhường
+    /// các tệp đang tải ở cuối hàng (chúng quay về hàng đợi và tải tiếp sau, không mất phần đã tải).
+    /// </summary>
+    public void StartFirst(IEnumerable<Guid> ids)
+    {
+        lock (_gate)
+        {
+            var targets = Find(ids)
+                .Where(i => i.Status != DownloadStatus.Completed && !_running.ContainsKey(i.Id) && !_restarting.Contains(i.Id))
+                .ToList();
+            if (targets.Count == 0)
+                return;
+            foreach (var item in Enumerable.Reverse(targets))
+            {
+                _items.Remove(item);
+                _items.Insert(0, item);
+                item.Status = DownloadStatus.Queued;
+                item.ErrorMessage = null;
+                item.AutoRetries = 0;
+                Raise(Changed, item);
+            }
+
+            var max = Math.Max(1, _settings().MaxConcurrent);
+            var active = _running.Values.Where(r => !r.Removed && !r.Cts.IsCancellationRequested).ToList();
+            var free = max - active.Count;
+            var bump = active
+                .OrderByDescending(r => _items.IndexOf(r.Item))
+                .Take(Math.Max(0, Math.Min(targets.Count - free, active.Count)));
+            foreach (var run in bump)
+            {
+                run.ResumeRequested = true;
+                run.Cts.Cancel();
+            }
+            Persist();
+            Pump();
+        }
+    }
+
     /// <summary>Số lần tự tải tiếp tối đa cho một tệp sau lỗi mạng (sau đó chờ người dùng bấm).</summary>
     public const int MaxAutoRetries = 8;
 
