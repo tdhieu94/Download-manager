@@ -146,11 +146,12 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     private void AddMediaRow(Core.Engine.YouTube.YouTubeInfo info)
     {
         _info = info;
-        _media = new MediaChoice(_lastMedia, info.Heights, info.HasSubtitles);
-        _media.SetBounds(S(24), S(184), _body.ClientSize.Width - S(48), S(36));
+        _media = new MediaChoice(_lastMedia with { ClipStart = null, ClipEnd = null }, info.Heights, info.HasSubtitles, clip: true, info.Duration);
+        var height = MediaChoice.RowsHeight(this, true);
+        _media.SetBounds(S(24), S(184), _body.ClientSize.Width - S(48), height);
         _body.Controls.Add(_media);
-        _bannerTop = S(232);
-        Height += S(46);
+        _bannerTop = S(184) + height + S(12);
+        Height += height + S(10);
         _media.Changed += (_, _) => ApplyMedia();
         ApplyMedia();
     }
@@ -164,6 +165,12 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         if (path.Length > 0 && !string.Equals(Path.GetExtension(path), options.Extension, StringComparison.OrdinalIgnoreCase))
             _path.Text = Path.ChangeExtension(path, options.Extension);
         _size = options.AudioOnly ? _info.AudioSize : options.MaxHeight is null ? _info.Size : null;
+        // Chỉ tải một đoạn: dung lượng ước theo độ dài đoạn.
+        if (options.IsClip && _size is { } full && _info.Duration is { } duration && duration > 0)
+        {
+            var length = (options.ClipEnd ?? duration) - (options.ClipStart ?? 0);
+            _size = Math.Max(0, full * length / duration);
+        }
         _sizeText = _size is null && !options.AudioOnly && options.MaxHeight is not null ? "Dung lượng tuỳ chất lượng" : SizeFormatter.Format(_size);
         Invalidate(true);
     }
@@ -272,6 +279,11 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
 
     private void Finish(DialogChoice choice)
     {
+        if (choice != DialogChoice.Cancel && _media?.Error is { } clipError)
+        {
+            MessageBox.Show(this, clipError, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         if (choice != DialogChoice.Cancel && !IsValidPath(_path.Text.Trim()))
         {
             MessageBox.Show(this, "Đường dẫn lưu không hợp lệ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);

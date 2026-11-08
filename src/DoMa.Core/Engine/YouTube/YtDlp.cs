@@ -9,7 +9,7 @@ namespace DoMa.Core.Engine.YouTube;
 /// Thông tin video lấy từ yt-dlp: tiêu đề, dung lượng ước tính của bản tốt nhất,
 /// các độ phân giải có sẵn (cao xuống thấp), dung lượng bản chỉ có tiếng và có phụ đề hay không.
 /// </summary>
-public sealed record YouTubeInfo(string Title, long? Size, bool IsLive, IReadOnlyList<int>? Heights = null, long? AudioSize = null, bool HasSubtitles = false);
+public sealed record YouTubeInfo(string Title, long? Size, bool IsLive, IReadOnlyList<int>? Heights = null, long? AudioSize = null, bool HasSubtitles = false, int? Duration = null);
 
 /// <summary>Một video trong playlist/kênh.</summary>
 public sealed record PlaylistEntry(string Url, string Title);
@@ -66,13 +66,18 @@ public static class YtDlp
     {
         options ??= MediaOptions.Default;
         if (options.AudioOnly)
-            return ["-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0"];
+            return ["-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0", .. Clip(options)];
         var sort = options.MaxHeight is { } h ? $"res:{h},fps,vcodec:h264,acodec:aac" : Sort;
-        string[] video = ["-f", Format, "-S", sort, "--merge-output-format", "mp4"];
+        string[] video = ["-f", Format, "-S", sort, "--merge-output-format", "mp4", .. Clip(options)];
         return options.Subtitles
             ? [.. video, "--write-subs", "--write-auto-subs", "--sub-langs", SubtitleLanguages, "--convert-subs", "srt", "--embed-subs"]
             : video;
     }
+
+    /// <summary>Chỉ tải một đoạn; cắt đúng giây (ffmpeg mã hoá lại phần đầu đoạn).</summary>
+    private static string[] Clip(MediaOptions options) => options.IsClip
+        ? ["--download-sections", $"*{options.ClipStart ?? 0}-{(options.ClipEnd is { } e ? e.ToString(CultureInfo.InvariantCulture) : "inf")}", "--force-keyframes-at-cuts"]
+        : [];
 
     public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null, MediaOptions? options = null) =>
     [
@@ -146,7 +151,8 @@ public static class YtDlp
             }
         }
         var subs = HasLanguage(root, "subtitles") || HasLanguage(root, "automatic_captions");
-        return new YouTubeInfo(title, size, live, heights.Count > 0 ? [.. heights] : null, audio, subs);
+        int? duration = root.TryGetProperty("duration", out var d) && d.ValueKind == JsonValueKind.Number && d.TryGetDouble(out var secs) && secs > 0 ? (int)Math.Ceiling(secs) : null;
+        return new YouTubeInfo(title, size, live, heights.Count > 0 ? [.. heights] : null, audio, subs, duration);
     }
 
     private static string? Text(JsonElement e, string name) =>

@@ -1,7 +1,9 @@
 namespace DoMa.Core.Models;
 
 /// <summary>Lựa chọn khi tải video từ trang (YouTube, Facebook…): chất lượng, chỉ lấy tiếng, kèm phụ đề.</summary>
-public sealed record MediaOptions(string Quality = MediaOptions.Best, bool Subtitles = false)
+/// <param name="ClipStart">Chỉ tải một đoạn: giây bắt đầu (null = từ đầu).</param>
+/// <param name="ClipEnd">Giây kết thúc (null = tới hết video).</param>
+public sealed record MediaOptions(string Quality = MediaOptions.Best, bool Subtitles = false, int? ClipStart = null, int? ClipEnd = null)
 {
     public const string Best = "best";
     public const string Audio = "audio";
@@ -14,6 +16,29 @@ public sealed record MediaOptions(string Quality = MediaOptions.Best, bool Subti
     public int? MaxHeight => int.TryParse(Quality, out var h) && h > 0 ? h : null;
 
     public string Extension => AudioOnly ? ".mp3" : ".mp4";
+
+    public bool IsClip => ClipStart is > 0 || ClipEnd is not null;
+
+    /// <summary>Đọc thời điểm dạng "90", "1:30" hoặc "1:02:03"; null nếu trống hoặc sai.</summary>
+    public static int? ParseTime(string? text)
+    {
+        var parts = (text ?? "").Trim().Split(':');
+        if (parts.Length is 0 or > 3 || parts[0].Length == 0)
+            return null;
+        var total = 0;
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!int.TryParse(parts[i], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                return null;
+            if (i > 0 && v >= 60)
+                return null;
+            total = total * 60 + v;
+        }
+        return total;
+    }
+
+    public static string FormatTime(int seconds) =>
+        seconds >= 3600 ? $"{seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}" : $"{seconds / 60}:{seconds % 60:00}";
 }
 
 /// <summary>Các mức chất lượng cho người dùng chọn, theo độ phân giải video thật sự có.</summary>

@@ -145,3 +145,35 @@ public class MediaSiteTests
         }
     }
 }
+
+public class MediaClipTests
+{
+    [Theory]
+    [InlineData("90", 90)]
+    [InlineData("1:30", 90)]
+    [InlineData("1:02:03", 3723)]
+    [InlineData("0:00", 0)]
+    [InlineData("1:75", null)]
+    [InlineData("abc", null)]
+    [InlineData("", null)]
+    [InlineData("-5", null)]
+    public void parses_time(string text, int? expected) => Assert.Equal(expected, MediaOptions.ParseTime(text));
+
+    [Fact]
+    public void formats_time()
+    {
+        Assert.Equal("1:30", MediaOptions.FormatTime(90));
+        Assert.Equal("1:02:03", MediaOptions.FormatTime(3723));
+    }
+
+    [Fact]
+    public void clip_adds_download_sections()
+    {
+        var args = YtDlp.FormatArguments(new MediaOptions(ClipStart: 90, ClipEnd: 150)).ToList();
+        Assert.Equal("*90-150", args[args.IndexOf("--download-sections") + 1]);
+        var tail = YtDlp.FormatArguments(new MediaOptions(MediaOptions.Audio, ClipStart: 30)).ToList();
+        Assert.Equal("*30-inf", tail[tail.IndexOf("--download-sections") + 1]);
+        Assert.DoesNotContain("--download-sections", YtDlp.FormatArguments(new MediaOptions()));
+        Assert.Equal(213, YtDlp.ParseInfo("""{"title":"x","duration":212.4}""").Duration);
+    }
+}
