@@ -53,6 +53,7 @@ public static class BatchLinks
             Category.Document => LinkKind.Document,
             Category.Software => LinkKind.Software,
             Category.Archive => LinkKind.Archive,
+            Category.Media => LinkKind.Media,
             _ => LinkKind.Other,
         };
     }

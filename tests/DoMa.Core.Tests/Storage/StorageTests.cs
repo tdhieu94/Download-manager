@@ -40,6 +40,18 @@ public class StorageTests : IDisposable
     }
 
     [Fact]
+    public void old_settings_get_media_category()
+    {
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "settings.json"), "{\"Extensions\":{\"Document\":[\"pdf\"]}}");
+
+        var loaded = new SettingsStore(dir).Load();
+
+        Assert.Equal(["pdf"], loaded.Extensions[Category.Document]);
+        Assert.Contains("mp4", loaded.Extensions[Category.Media]);
+    }
+
+    [Fact]
     public void connections_clamped()
     {
         Assert.Equal(32, new Settings { ConnectionsPerFile = 40 }.ConnectionsPerFile);

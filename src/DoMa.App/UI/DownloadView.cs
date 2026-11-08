@@ -3,7 +3,7 @@ using DoMa.Core.Models;
 
 namespace DoMa.App.UI;
 
-public enum DownloadFilter { All, Active, Completed, Later, Documents, Software, Archives, Other }
+public enum DownloadFilter { All, Active, Completed, Later, Documents, Software, Archives, Media, Other }
 
 public static class DownloadView
 {
@@ -55,6 +55,7 @@ public static class DownloadView
         DownloadFilter.Documents => item.Category == Category.Document,
         DownloadFilter.Software => item.Category == Category.Software,
         DownloadFilter.Archives => item.Category == Category.Archive,
+        DownloadFilter.Media => item.Category == Category.Media,
         _ => item.Category == Category.Other,
     };
 

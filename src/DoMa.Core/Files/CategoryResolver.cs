@@ -9,6 +9,7 @@ public class CategoryResolver(IReadOnlyDictionary<Category, string[]> extensions
         [Category.Document] = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "odt", "ods", "epub"],
         [Category.Software] = ["exe", "msi", "msix", "iso", "img", "apk", "appx"],
         [Category.Archive] = ["zip", "rar", "7z", "tar", "gz", "bz2", "xz"],
+        [Category.Media] = ["mp4", "mkv", "webm", "avi", "mov", "wmv", "flv", "m4v", "ts", "mp3", "m4a", "flac", "wav", "aac", "ogg", "opus"],
     };
 
     public Category Resolve(string fileName)
@@ -29,6 +30,7 @@ public class CategoryResolver(IReadOnlyDictionary<Category, string[]> extensions
         Category.Document => "TaiLieu",
         Category.Software => "PhanMem",
         Category.Archive => "Nen",
+        Category.Media => "Video",
         _ => "Khac",
     });
 }

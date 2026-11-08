@@ -14,7 +14,7 @@ public sealed class BatchForm : Form
         (LinkKind.Document, "Tài liệu"),
         (LinkKind.Software, "Phần mềm"),
         (LinkKind.Archive, "Nén"),
-        (LinkKind.Media, "Video & nhạc"),
+        (LinkKind.Media, "Video, nhạc"),
         (LinkKind.Other, "Trang khác"),
     ];
 

@@ -225,6 +225,7 @@ public static class Theme
         Category.Document => Accent,
         Category.Software => Violet,
         Category.Archive => Warning,
+        Category.Media => Success,
         _ => TextMuted,
     };
 
@@ -233,6 +234,7 @@ public static class Theme
         Category.Document => IconKind.Document,
         Category.Software => IconKind.Package,
         Category.Archive => IconKind.Archive,
+        Category.Media => IconKind.Play,
         _ => IconKind.Shapes,
     };
 
@@ -241,6 +243,7 @@ public static class Theme
         Category.Document => "Tài liệu",
         Category.Software => "Phần mềm",
         Category.Archive => "Nén",
+        Category.Media => "Video, nhạc",
         _ => "Khác",
     };
 

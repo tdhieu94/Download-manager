@@ -10,8 +10,15 @@ public class CategoryResolverTests
     [InlineData("bao-cao.PDF", Category.Document)]
     [InlineData("data.tar.gz", Category.Archive)]
     [InlineData("noextension", Category.Other)]
+    [InlineData("Phim hay.MP4", Category.Media)]
+    [InlineData("video.ts", Category.Media)]
+    [InlineData("bai-hat.flac", Category.Media)]
     public void resolves_category(string name, Category expected) =>
         Assert.Equal(expected, new CategoryResolver(CategoryResolver.Defaults, @"C:\D").Resolve(name));
+
+    [Fact]
+    public void media_goes_to_video_folder() =>
+        Assert.Equal(Path.Combine("/d", "Video"), new CategoryResolver(CategoryResolver.Defaults, "/d").FolderFor(Category.Media));
 
     [Fact]
     public void folder_for_software() =>

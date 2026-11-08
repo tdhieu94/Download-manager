@@ -33,6 +33,7 @@ public sealed class MainForm : Form
         new(DownloadFilter.Documents, "Tài liệu", IconKind.Document),
         new(DownloadFilter.Software, "Phần mềm", IconKind.Package),
         new(DownloadFilter.Archives, "Nén", IconKind.Archive),
+        new(DownloadFilter.Media, "Video, nhạc", IconKind.Play),
         new(DownloadFilter.Other, "Khác", IconKind.Shapes),
     ];
 

@@ -7,7 +7,7 @@ namespace DoMa.App.UI;
 
 public sealed class SettingsForm : Form
 {
-    private static readonly Category[] Listed = [Category.Document, Category.Software, Category.Archive];
+    private static readonly Category[] Listed = [Category.Document, Category.Software, Category.Archive, Category.Media];
 
     private readonly InputBox _root = new(IconKind.Folder);
     private readonly ModernButton _browse = new("Chọn…");

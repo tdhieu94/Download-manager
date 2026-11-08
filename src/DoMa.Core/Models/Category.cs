@@ -1,3 +1,3 @@
 namespace DoMa.Core.Models;
 
-public enum Category { Document, Software, Archive, Other }
+public enum Category { Document, Software, Archive, Other, Media }
