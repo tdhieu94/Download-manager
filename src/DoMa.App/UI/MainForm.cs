@@ -16,7 +16,8 @@ internal sealed record QuickActions(
     Func<int> StartLaterNow,
     Func<Scheduling.AfterDone> AfterDone,
     Action<Scheduling.AfterDone> SetAfterDone,
-    Func<string> Describe);
+    Func<string> Describe,
+    Action? ManageChannels = null);
 
 public sealed class MainForm : Form
 {
@@ -367,6 +368,8 @@ public sealed class MainForm : Form
         }));
         menu.Items.Add(new ToolStripMenuItem("Hẹn giờ tải tự động…", null, (_, _) => _openSettings()));
         menu.Items.Add(new ToolStripMenuItem("Dọn tệp đã tải xong khỏi danh sách…", null, (_, _) => ClearCompleted()));
+        if (quick.ManageChannels is { } channels)
+            menu.Items.Add(new ToolStripMenuItem("Kênh YouTube đang theo dõi…", null, (_, _) => channels()));
 
         menu.Items.Add(new ToolStripSeparator());
         AddHeader(menu, "Khi tải xong tất cả");

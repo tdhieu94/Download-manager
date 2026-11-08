@@ -96,7 +96,8 @@ internal sealed class MainContext : ApplicationContext
             () => _schedule.StartLaterNow(),
             () => _schedule.AfterDone,
             _schedule.SetAfterDone,
-            _schedule.Describe);
+            _schedule.Describe,
+            ManageChannels);
         _tray = new TrayController(ShowNow, Exit, UI.MainForm.OpenFolder, () => _updates?.CheckNow(),
             PauseAll, ResumeAll,
             () => (_manager.Items.Any(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued),
@@ -198,7 +199,10 @@ internal sealed class MainContext : ApplicationContext
             _tray.Toast("Không đọc được playlist", error ?? "", ToolTipIcon.Warning, null, 10);
             return false;
         }
-        var chosen = new TaskCompletionSource<(IReadOnlyList<BatchLink> Links, MediaOptions Media, bool StartNow)?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var url = Core.Engine.YouTube.MediaLink.Normalize(req.Url);
+        var isChannel = Core.Channels.ChannelWatch.CheckLimit(url) is not null;
+        var following = _channels.Any(c => c.Url == url);
+        var chosen = new TaskCompletionSource<(IReadOnlyList<BatchLink> Links, MediaOptions Media, bool StartNow, bool Follow)?>(TaskCreationOptions.RunContinuationsAsynchronously);
         PostToForm(() =>
         {
             try
@@ -207,10 +211,13 @@ internal sealed class MainContext : ApplicationContext
                     .Select(e => new BatchLink(e.Url, FileNameResolver.Sanitize(e.Title), LinkKind.Media, "youtube.com"))
                     .ToList();
                 var more = playlist.Entries.Count >= Core.Engine.YouTube.YtDlp.MaxPlaylistItems ? $" (DoMa lấy tối đa {Core.Engine.YouTube.YtDlp.MaxPlaylistItems} video)" : "";
+                var follow = following ? null
+                    : isChannel ? "Theo dõi kênh này: tự tải video mới khi kênh đăng"
+                    : "Theo dõi playlist này: tự tải video mới được thêm vào";
                 using var dialog = new UI.BatchForm(links, "", LastMedia, playlist.Title,
-                    $"{links.Count} video{more}. Tích chọn các video muốn tải.");
+                    $"{links.Count} video{more}. Tích chọn các video muốn tải{(following ? " (đang theo dõi)" : "")}.", follow, checkAll: !isChannel);
                 chosen.TrySetResult(dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK
-                    ? (dialog.Selected, dialog.Media ?? LastMedia, dialog.StartNow)
+                    ? (dialog.Selected, dialog.Media ?? LastMedia, dialog.StartNow, dialog.Follow)
                     : null);
             }
             catch (Exception e)
@@ -221,10 +228,131 @@ internal sealed class MainContext : ApplicationContext
         if (await chosen.Task is not { } pick)
             return false;
         RememberMedia(pick.Media);
+        if (pick.Follow)
+            Follow(url, playlist, pick.Media);
         var added = AddMedia(pick.Links.Select(l => (l.Url, (string?)l.FileName)), pick.Media, pick.StartNow, req.Cookies, req.UserAgent);
         if (added > 0)
             _tray.Toast("Đã thêm playlist", $"{added} video · {playlist.Title}", ToolTipIcon.Info, ShowNow);
-        return added > 0;
+        else if (pick.Follow)
+            _tray.Toast("Đang theo dõi", $"{playlist.Title} · DoMa sẽ tự tải video mới", ToolTipIcon.Info, null);
+        return added > 0 || pick.Follow;
+    }
+
+    // ───────────── Theo dõi kênh/playlist YouTube ─────────────
+
+    private readonly Core.Channels.ChannelStore _channelStore = new(AppPaths.DataDir);
+    private List<Core.Channels.FollowedChannel> _channels = [];
+    private readonly System.Windows.Forms.Timer _channelTimer = new() { Interval = 30 * 60_000 };
+    private bool _checkingChannels;
+
+    /// <summary>Bắt đầu theo dõi: các video đang có coi như đã thấy, chỉ tải video đăng sau này.</summary>
+    private void Follow(string url, Core.Engine.YouTube.PlaylistInfo playlist, MediaOptions options)
+    {
+        lock (_channelStore)
+        {
+            if (_channels.Any(c => c.Url == url))
+                return;
+            var channel = new Core.Channels.FollowedChannel
+            {
+                Url = url,
+                Title = playlist.Title,
+                Quality = options.Quality,
+                Subtitles = options.Subtitles,
+                LastCheck = DateTimeOffset.UtcNow,
+            };
+            Core.Channels.ChannelWatch.MarkSeen(channel, playlist.Entries.Select(e => e.Url));
+            _channels.Add(channel);
+            SaveChannels();
+        }
+    }
+
+    private void SaveChannels()
+    {
+        try
+        {
+            lock (_channelStore)
+                _channelStore.Save(_channels);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("channels", e, null);
+        }
+    }
+
+    private void StartChannelWatch()
+    {
+        _channels = _channelStore.Load();
+        _channelTimer.Tick += (_, _) => _ = CheckChannelsAsync(force: false);
+        _channelTimer.Start();
+        // Kiểm tra lần đầu sau khi mở DoMa 2 phút, để không làm chậm lúc khởi động.
+        _ = Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ => PostToForm(() => _ = CheckChannelsAsync(force: false)), TaskScheduler.Default);
+    }
+
+    /// <summary>Xem các kênh đến hạn có video mới không; có thì thêm vào danh sách và tải ngay.</summary>
+    private async Task<int> CheckChannelsAsync(bool force)
+    {
+        if (_checkingChannels || !_ytTools.Ready)
+            return 0;
+        _checkingChannels = true;
+        var total = 0;
+        try
+        {
+            List<Core.Channels.FollowedChannel> due;
+            lock (_channelStore)
+                due = _channels.Where(c => force || Core.Channels.ChannelWatch.Due(c, DateTimeOffset.UtcNow)).ToList();
+            foreach (var channel in due)
+            {
+                var req = new DownloadRequest(channel.Url, null, null, null, null, null, null);
+                var (playlist, error) = await _ytEngine.PlaylistAsync(req, CancellationToken.None, Core.Channels.ChannelWatch.CheckLimit(channel.Url));
+                if (playlist is null)
+                {
+                    _log.Write("channels", new IOException(error ?? "?"), channel.Url);
+                    continue;
+                }
+                List<Core.Engine.YouTube.PlaylistEntry> fresh;
+                lock (_channelStore)
+                {
+                    fresh = Core.Channels.ChannelWatch.NewEntries(channel, playlist.Entries);
+                    Core.Channels.ChannelWatch.MarkSeen(channel, fresh.Select(e => e.Url));
+                    channel.LastCheck = DateTimeOffset.UtcNow;
+                }
+                SaveChannels();
+                if (fresh.Count == 0)
+                    continue;
+                var added = AddMedia(fresh.Select(e => (e.Url, (string?)e.Title)), channel.Options, true, null, null);
+                total += added;
+                if (added > 0)
+                    _tray.Toast($"Video mới từ {channel.Title}", added == 1 ? fresh[0].Title : $"{added} video mới · đang tải", ToolTipIcon.Info, ShowNow);
+            }
+        }
+        catch (Exception e)
+        {
+            _log.Write("channels", e, null);
+        }
+        finally
+        {
+            _checkingChannels = false;
+        }
+        return total;
+    }
+
+    private void ManageChannels()
+    {
+        List<Core.Channels.FollowedChannel> snapshot;
+        lock (_channelStore)
+            snapshot = [.. _channels];
+        using var dialog = new UI.ChannelsForm(snapshot);
+        dialog.CheckNow = async () =>
+        {
+            // Kênh vừa bỏ theo dõi trong hộp này thì không kiểm tra nữa.
+            lock (_channelStore)
+                _channels.RemoveAll(c => dialog.Removed.Contains(c.Url));
+            return await CheckChannelsAsync(force: true);
+        };
+        dialog.ShowDialog(_form);
+        lock (_channelStore)
+            _channels.RemoveAll(c => dialog.Removed.Contains(c.Url));
+        SaveChannels();
     }
 
     /// <summary>Thêm các video từ trang vào danh sách, lưu vào thư mục Video với tên theo tiêu đề.</summary>
@@ -564,6 +692,7 @@ internal sealed class MainContext : ApplicationContext
                 _manager.ResumeNetworkFailures();
         };
         _networkTimer.Start();
+        StartChannelWatch();
     }
 
     private void OnNetworkAvailability(object? sender, System.Net.NetworkInformation.NetworkAvailabilityEventArgs e)
@@ -793,6 +922,7 @@ internal sealed class MainContext : ApplicationContext
         }
         System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailability;
         _networkTimer.Dispose();
+        _channelTimer.Dispose();
         _trayTimer.Dispose();
         _updates.Dispose();
         _clipboard.Dispose();

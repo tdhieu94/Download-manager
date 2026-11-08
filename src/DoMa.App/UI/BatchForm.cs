@@ -44,10 +44,13 @@ public sealed class BatchForm : Form
     private readonly MediaChoice? _media;
 
     /// <param name="media">Có video từ trang (YouTube…): hiện thêm dòng chọn chất lượng, mở sẵn lựa chọn lần trước.</param>
-    public BatchForm(IReadOnlyList<BatchLink> links, string source, MediaOptions? media = null, string? title = null, string? hint = null)
+    private readonly CheckBox? _follow;
+
+    /// <param name="follow">Có chữ: hiện ô "theo dõi" (playlist/kênh YouTube) với chữ này.</param>
+    public BatchForm(IReadOnlyList<BatchLink> links, string source, MediaOptions? media = null, string? title = null, string? hint = null, string? follow = null, bool checkAll = true)
     {
         _links = [.. links];
-        _checked = _links.Where(l => l.IsFile).Select(l => l.Url).ToHashSet();
+        _checked = checkAll ? _links.Where(l => l.IsFile).Select(l => l.Url).ToHashSet() : [];
         Text = "Tải nhiều link";
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
@@ -121,6 +124,13 @@ public sealed class BatchForm : Form
             var strip = new Panel { Dock = DockStyle.Bottom, Height = S(48), BackColor = Theme.Surface, Padding = new Padding(S(24), S(2), S(24), S(10)) };
             _media = new MediaChoice(media, null) { Dock = DockStyle.Fill };
             strip.Controls.Add(_media);
+            if (follow is not null)
+            {
+                strip.Height += S(30);
+                _follow = new CheckBox { Text = follow, AutoSize = true, Font = Theme.Body, ForeColor = Theme.Text, Dock = DockStyle.Bottom };
+                _follow.CheckedChanged += (_, _) => UpdateCount();
+                strip.Controls.Add(_follow);
+            }
             Controls.Add(strip);
         }
         Controls.Add(DialogParts.Footer(this, _now, _later, _cancel));
@@ -140,6 +150,9 @@ public sealed class BatchForm : Form
 
     /// <summary>Chất lượng chọn cho các video từ trang; null nếu hộp không có dòng chọn chất lượng.</summary>
     public MediaOptions? Media => _media?.Options;
+
+    /// <summary>Người dùng tích "theo dõi": tự tải video mới sau này.</summary>
+    public bool Follow => _follow?.Checked == true;
 
     private int S(int v) => Theme.Scale(this, v);
 
@@ -193,7 +206,7 @@ public sealed class BatchForm : Form
         _updating = true;
         _all.Checked = _visible.Count > 0 && chosen == _visible.Count;
         _updating = false;
-        _now.Enabled = _later.Enabled = chosen > 0;
+        _now.Enabled = _later.Enabled = chosen > 0 || Follow;
     }
 
     private List<BatchLink> ChosenVisible() => _visible.Where(l => _checked.Contains(l.Url)).ToList();
@@ -214,7 +227,7 @@ public sealed class BatchForm : Form
     {
         // Chỉ tải những link đang hiện (đúng bộ lọc) và được tích.
         Selected = ChosenVisible();
-        if (Selected.Count == 0)
+        if (Selected.Count == 0 && !Follow)
             return;
         StartNow = startNow;
         DialogResult = DialogResult.OK;

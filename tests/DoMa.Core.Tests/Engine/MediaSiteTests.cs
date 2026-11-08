@@ -177,3 +177,42 @@ public class MediaClipTests
         Assert.Equal(213, YtDlp.ParseInfo("""{"title":"x","duration":212.4}""").Duration);
     }
 }
+
+public class ChannelWatchTests
+{
+    [Fact]
+    public void only_unseen_videos_are_new()
+    {
+        var c = new DoMa.Core.Channels.FollowedChannel { Url = "https://www.youtube.com/@k/videos" };
+        DoMa.Core.Channels.ChannelWatch.MarkSeen(c, ["a", "b"]);
+        var fresh = DoMa.Core.Channels.ChannelWatch.NewEntries(c, [new("c", "C"), new("a", "A"), new("c", "C2")]);
+        Assert.Equal(["c"], fresh.Select(e => e.Url));
+        DoMa.Core.Channels.ChannelWatch.MarkSeen(c, fresh.Select(e => e.Url));
+        Assert.Equal(["c", "a", "b"], c.Seen);
+        Assert.Equal(30, DoMa.Core.Channels.ChannelWatch.CheckLimit(c.Url));
+        Assert.Null(DoMa.Core.Channels.ChannelWatch.CheckLimit("https://www.youtube.com/playlist?list=PL1"));
+        Assert.True(DoMa.Core.Channels.ChannelWatch.Due(c, DateTimeOffset.UtcNow));
+        c.LastCheck = DateTimeOffset.UtcNow;
+        Assert.False(DoMa.Core.Channels.ChannelWatch.Due(c, DateTimeOffset.UtcNow.AddHours(1)));
+    }
+
+    [Fact]
+    public void store_round_trips()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "doma-ch-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new DoMa.Core.Channels.ChannelStore(dir);
+            Assert.Empty(store.Load());
+            store.Save([new() { Url = "u", Title = "T", Quality = "720", Seen = ["x"] }]);
+            var back = Assert.Single(store.Load());
+            Assert.Equal("720", back.Options.Quality);
+            Assert.Equal(["x"], back.Seen);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, true);
+        }
+    }
+}

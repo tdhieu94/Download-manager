@@ -50,10 +50,11 @@ public static class YtDlp
     public const int MaxPlaylistItems = 1000;
 
     /// <summary>Danh sách video của playlist/kênh (không tải gì, chỉ đọc tên và link).</summary>
-    public static IReadOnlyList<string> PlaylistArguments(string url, string? cookieFile, string? denoPath = null) =>
+    /// <param name="limit">Chỉ đọc chừng này video đầu danh sách (kênh: mới nhất trước).</param>
+    public static IReadOnlyList<string> PlaylistArguments(string url, string? cookieFile, string? denoPath = null, int? limit = null) =>
     [
         "-J", "--flat-playlist", "--yes-playlist", "--no-warnings", "--encoding", "utf-8",
-        "--playlist-end", MaxPlaylistItems.ToString(CultureInfo.InvariantCulture),
+        "--playlist-end", Math.Clamp(limit ?? MaxPlaylistItems, 1, MaxPlaylistItems).ToString(CultureInfo.InvariantCulture),
         .. Runtime(denoPath),
         .. Cookies(cookieFile),
         "--", url,

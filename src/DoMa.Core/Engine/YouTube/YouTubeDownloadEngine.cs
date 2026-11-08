@@ -63,9 +63,9 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
     }
 
     /// <summary>Danh sách video của playlist hoặc kênh YouTube.</summary>
-    public async Task<(PlaylistInfo? Info, string? Error)> PlaylistAsync(DownloadRequest req, CancellationToken ct)
+    public async Task<(PlaylistInfo? Info, string? Error)> PlaylistAsync(DownloadRequest req, CancellationToken ct, int? limit = null)
     {
-        var (output, error) = await QueryAsync(req, (url, cookies) => YtDlp.PlaylistArguments(url, cookies, Deno()), ct);
+        var (output, error) = await QueryAsync(req, (url, cookies) => YtDlp.PlaylistArguments(url, cookies, Deno(), limit), ct);
         if (output is null)
             return (null, error);
         try
