@@ -94,7 +94,7 @@ public sealed class YouTubeTools(string folder, HttpClient http)
     private async Task DownloadAsync(string url, string path, Action<int>? percent, CancellationToken ct)
     {
         var temp = path + ".tmp";
-        using (var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
+        using (var resp = await GetFollowingRedirectsAsync(url, ct))
         {
             resp.EnsureSuccessStatusCode();
             var total = resp.Content.Headers.ContentLength;
@@ -116,6 +116,24 @@ public sealed class YouTubeTools(string folder, HttpClient http)
             }
         }
         File.Move(temp, path, true);
+    }
+
+    /// <summary>
+    /// GitHub trả link tải bằng chuyển hướng (302) sang máy chủ chứa tệp; HttpClient của DoMa tắt tự chuyển hướng
+    /// (để giữ cookie đúng trang) nên phải tự đi theo.
+    /// </summary>
+    private async Task<HttpResponseMessage> GetFollowingRedirectsAsync(string url, CancellationToken ct)
+    {
+        var uri = new Uri(url);
+        for (var hop = 0; ; hop++)
+        {
+            var resp = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+            var code = (int)resp.StatusCode;
+            if (code is < 300 or >= 400 || resp.Headers.Location is not { } location || hop >= 10)
+                return resp;
+            resp.Dispose();
+            uri = location.IsAbsoluteUri ? location : new Uri(uri, location);
+        }
     }
 
     /// <summary>Lấy ffmpeg (và ffprobe) trong thư mục bin của tệp zip.</summary>

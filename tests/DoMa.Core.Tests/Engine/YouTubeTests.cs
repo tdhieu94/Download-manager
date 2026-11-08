@@ -103,6 +103,45 @@ public sealed class YouTubeTests : IDisposable
     }
 
     [Fact]
+    public async Task installs_tools_following_github_redirects()
+    {
+        var zipPath = Path.Combine(_dir, "src.zip");
+        using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        using (var w = new StreamWriter(zip.CreateEntry(OperatingSystem.IsWindows() ? "x/bin/ffmpeg.exe" : "x/bin/ffmpeg").Open()))
+            w.Write("ff");
+        var zipBytes = File.ReadAllBytes(zipPath);
+        var handler = new RedirectHandler(req => req.RequestUri!.Host == "github.com"
+            ? Redirect("https://assets.example/" + Path.GetFileName(req.RequestUri.AbsolutePath))
+            : new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(req.RequestUri.AbsolutePath.EndsWith(".zip") ? zipBytes : [1, 2, 3]),
+            });
+        var folder = Path.Combine(_dir, "tools");
+        var tools = new YouTubeTools(folder, new HttpClient(handler));
+
+        await tools.InstallAsync(null, CancellationToken.None);
+
+        Assert.True(File.Exists(tools.YtDlpPath));
+        Assert.True(File.Exists(tools.FfmpegPath));
+        Assert.True(tools.Ready);
+        Assert.Empty(Directory.GetFiles(folder, "*.part*"));
+        Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
+    }
+
+    private static HttpResponseMessage Redirect(string to)
+    {
+        var resp = new HttpResponseMessage(System.Net.HttpStatusCode.Found);
+        resp.Headers.Location = new Uri(to);
+        return resp;
+    }
+
+    private sealed class RedirectHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(respond(request));
+    }
+
+    [Fact]
     public void extracts_ffmpeg_from_zip()
     {
         var zipPath = Path.Combine(_dir, "f.zip");

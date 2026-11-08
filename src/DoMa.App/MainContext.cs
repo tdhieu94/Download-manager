@@ -34,6 +34,7 @@ internal sealed class MainContext : ApplicationContext
     private readonly Core.Engine.YouTube.YouTubeDownloadEngine _ytEngine;
     private readonly SynchronizationContext _ui;
     private Task<bool>? _ytInstall;
+    private volatile int _ytInstallPercent = -1;
     private readonly System.Windows.Forms.Timer _networkTimer = new() { Interval = 30_000 };
     private readonly System.Windows.Forms.Timer _trayTimer = new() { Interval = 1_000 };
     private readonly ScheduleService _schedule;
@@ -182,17 +183,20 @@ internal sealed class MainContext : ApplicationContext
         }, null);
         if (!await asked.Task)
             return false;
-        _tray.Toast("Đang chuẩn bị tải YouTube", "Đang tải yt-dlp và ffmpeg (một lần duy nhất)…", ToolTipIcon.None, null, 8);
+        _tray.Toast("Đang chuẩn bị tải YouTube", "Đang tải yt-dlp và ffmpeg (một lần duy nhất, có thể mất vài phút)…", ToolTipIcon.None, null, 10);
         try
         {
-            await _ytTools.InstallAsync(null, CancellationToken.None);
+            _ytInstallPercent = 0;
+            await _ytTools.InstallAsync(new Progress<int>(p => _ytInstallPercent = p), CancellationToken.None);
+            _ytInstallPercent = -1;
             _tray.Toast("Đã sẵn sàng tải YouTube", "Đang lấy thông tin video…", ToolTipIcon.Info, null);
             return true;
         }
         catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or TaskCanceledException)
         {
             _log.Write("youtube-tools", e, null);
-            _tray.Toast("Không tải được công cụ YouTube", "Kiểm tra kết nối mạng rồi thử lại.", ToolTipIcon.Error, null, 10);
+            _ytInstallPercent = -1;
+            _tray.Toast("Không tải được công cụ YouTube", $"Kiểm tra kết nối mạng rồi thử lại. ({e.Message})", ToolTipIcon.Error, null, 10);
             return false;
         }
     }
@@ -408,7 +412,10 @@ internal sealed class MainContext : ApplicationContext
         long? total = active.Count > 0 && active.All(i => i.TotalBytes is > 0) ? active.Sum(i => i.TotalBytes!.Value) : null;
         var downloaded = active.Sum(i => i.DownloadedBytes);
         var speed = active.Sum(i => _manager.SpeedBytesPerSec(i.Id));
-        _tray.SetStatus(TrayController.Summary(active.Count, downloaded, total, speed));
+        var status = TrayController.Summary(active.Count, downloaded, total, speed);
+        if (_ytInstallPercent >= 0)
+            status = $"Đang tải công cụ YouTube {_ytInstallPercent}%" + (status is null ? "" : " · " + status);
+        _tray.SetStatus(status);
     }
 
     /// <summary>Có mạng lại thì cho chạy tiếp ngay các tệp lỗi vì mất mạng; ngoài ra cứ 30 giây xem có tệp nào tới lượt thử lại.</summary>
