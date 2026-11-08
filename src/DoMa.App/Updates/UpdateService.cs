@@ -149,7 +149,8 @@ internal sealed class UpdateService : IDisposable
             _log.Write("update", e, null);
             _installing = false;
             _form.SetUpdateStatus("Cập nhật chưa thành công. Bấm “Cập nhật ngay” để thử lại.", busy: false);
-            Message(e is InvalidDataException ? e.Message : "Không tải được bộ cài cập nhật. Hãy thử lại sau.", MessageBoxIcon.Warning);
+            var manual = release.PageUrl is null ? "" : "\n\nNếu vẫn lỗi, bạn có thể tải bộ cài trực tiếp tại:\n" + release.PageUrl;
+            Message(UpdateErrors.Describe(e) + manual, MessageBoxIcon.Warning);
         }
     }
 

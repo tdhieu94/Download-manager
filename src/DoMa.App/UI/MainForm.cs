@@ -72,6 +72,9 @@ public sealed class MainForm : Form
     private readonly ModernButton _updateNow = new("Cập nhật ngay", IconKind.Download, ButtonKind.Primary);
     private readonly ModernButton _updateLater = new("Để sau", IconKind.None, ButtonKind.Ghost);
     private readonly ModernButton _updateNotes = new("Có gì mới", IconKind.Document, ButtonKind.Secondary);
+    // Control.Visible trả về false khi cửa sổ đang ẩn ở khay, nên tự nhớ nút nào cần hiện để xếp chỗ cho đúng.
+    private bool _updateLaterShown = true;
+    private bool _updateNotesShown;
     private string _updateTitle = "";
     private string _updateDetail = "";
     private Action? _onUpdate;
@@ -505,7 +508,7 @@ public sealed class MainForm : Form
             Theme.DrawRound(g, Theme.AccentSoftStrong, box, S(10));
             var icon = S(20);
             Icons.Draw(g, IconKind.Download, new RectangleF(S(16), box.Y + (box.Height - icon) / 2, icon, icon), Theme.Accent);
-            var textW = (_updateNotes.Visible ? _updateNotes.Left : _updateLater.Left) - S(60);
+            var textW = Math.Max(0, LeftmostBannerButton() - S(60));
             TextRenderer.DrawText(g, _updateTitle, Theme.BodySemibold, new Rectangle(S(48), (int)box.Y + S(9), textW, S(20)), Theme.AccentText,
                 TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, _updateDetail, Theme.Small, new Rectangle(S(48), (int)box.Y + S(29), textW, S(18)), Theme.TextSecondary,
@@ -518,6 +521,7 @@ public sealed class MainForm : Form
         }
         _updateBanner.Resize += (_, _) => LayoutBanner();
         _updateBanner.BackColorChanged += (_, _) => LayoutBanner();
+        _updateBanner.VisibleChanged += (_, _) => LayoutBanner();
         _updateNow.Click += (_, _) => _onUpdate?.Invoke();
         _updateNotes.Click += (_, _) => _onUpdateNotes?.Invoke();
         _updateLater.Click += (_, _) =>
@@ -533,21 +537,26 @@ public sealed class MainForm : Form
         var y = (_updateBanner.Height - S(12) - S(34)) / 2;
         _updateNow.Location = new Point(_updateBanner.Width - _updateNow.Width - S(12), y);
         _updateLater.Location = new Point(_updateNow.Left - _updateLater.Width - S(6), y);
-        _updateNotes.Location = new Point((_updateLater.Visible ? _updateLater.Left : _updateNow.Left) - _updateNotes.Width - S(6), y);
+        _updateNotes.Location = new Point((_updateLaterShown ? _updateLater.Left : _updateNow.Left) - _updateNotes.Width - S(6), y);
+        _updateLater.Visible = _updateLaterShown;
+        _updateNotes.Visible = _updateNotesShown;
         _updateBanner.Invalidate();
     }
+
+    private int LeftmostBannerButton() =>
+        _updateNotesShown ? _updateNotes.Left : _updateLaterShown ? _updateLater.Left : _updateNow.Left;
 
     /// <summary>Hiện dải thông báo có bản cập nhật mới phía trên danh sách tải.</summary>
     public void ShowUpdate(string title, string detail, Action install, Action later, Action? showNotes = null)
     {
         _onUpdateNotes = showNotes;
-        _updateNotes.Visible = showNotes is not null;
+        _updateNotesShown = showNotes is not null;
         _updateTitle = title;
         _updateDetail = detail;
         _onUpdate = install;
         _onUpdateLater = later;
         _updateNow.Enabled = true;
-        _updateLater.Visible = true;
+        _updateLaterShown = true;
         _updateBanner.Visible = true;
         LayoutBanner();
     }
@@ -557,7 +566,7 @@ public sealed class MainForm : Form
     {
         _updateDetail = detail;
         _updateNow.Enabled = !busy;
-        _updateLater.Visible = !busy;
+        _updateLaterShown = !busy;
         LayoutBanner();
     }
 
