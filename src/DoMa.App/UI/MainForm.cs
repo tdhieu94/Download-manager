@@ -332,6 +332,7 @@ public sealed class MainForm : Form
                 MessageBox.Show(this, "Hàng “Chờ tải sau” đang trống.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }));
         menu.Items.Add(new ToolStripMenuItem("Hẹn giờ tải tự động…", null, (_, _) => _openSettings()));
+        menu.Items.Add(new ToolStripMenuItem("Dọn tệp đã tải xong khỏi danh sách…", null, (_, _) => ClearCompleted()));
 
         menu.Items.Add(new ToolStripSeparator());
         AddHeader(menu, "Khi tải xong tất cả");
@@ -344,6 +345,22 @@ public sealed class MainForm : Form
         }
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
         menu.Show(anchor, new Point(anchor.Width - menu.PreferredSize.Width, anchor.Height + S(4)));
+    }
+
+    /// <summary>Bỏ các tệp đã tải xong khỏi danh sách cho gọn; tệp trên ổ đĩa vẫn giữ nguyên.</summary>
+    private void ClearCompleted()
+    {
+        var done = _manager.Items.Where(i => i.Status == DownloadStatus.Completed).Select(i => i.Id).ToList();
+        if (done.Count == 0)
+        {
+            MessageBox.Show(this, "Chưa có tệp nào tải xong.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var answer = MessageBox.Show(this,
+            $"Bỏ {done.Count} tệp đã tải xong khỏi danh sách?\n\nTệp trên ổ đĩa vẫn được giữ nguyên.",
+            "Dọn danh sách", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (answer == DialogResult.OK)
+            RunLogged(() => _manager.Remove(done, false));
     }
 
     private static void AddHeader(ContextMenuStrip menu, string text) =>
