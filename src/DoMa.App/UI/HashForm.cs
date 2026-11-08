@@ -10,7 +10,7 @@ public sealed class HashForm : Form
     private readonly InputBox _md5 = new() { ReadOnly = true };
     private readonly InputBox _sha1 = new() { ReadOnly = true };
     private readonly InputBox _sha256 = new() { ReadOnly = true };
-    private readonly InputBox _expected = new(IconKind.Hash) { PlaceholderText = "Dán mã băm từ trang tải để so sánh" };
+    private readonly InputBox _expected = new(IconKind.Hash) { PlaceholderText = L.T("Dán mã băm từ trang tải để so sánh") };
     private readonly Label _verdict = new() { AutoSize = false, Font = Theme.BodySemibold };
     private readonly CancellationTokenSource _cts = new();
     private FileHashes? _hashes;
@@ -18,12 +18,12 @@ public sealed class HashForm : Form
     public HashForm(string path)
     {
         _path = path;
-        Text = "Kiểm tra mã băm";
+        Text = L.T("Kiểm tra mã băm");
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(640, 470));
         int S(int v) => Theme.Scale(this, v);
 
-        var close = new ModernButton("Đóng") { DialogResult = DialogResult.Cancel };
+        var close = new ModernButton(L.T("Đóng")) { DialogResult = DialogResult.Cancel };
         CancelButton = close;
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
@@ -35,7 +35,7 @@ public sealed class HashForm : Form
             var caption = DialogParts.FieldLabel(label);
             caption.Location = new Point(x, y + S(9));
             box.SetBounds(x + S(80), y, w - S(80) - S(44), S(36));
-            box.Text = "Đang tính…";
+            box.Text = L.T("Đang tính…");
             var copy = new ModernButton("Copy", IconKind.Copy, ButtonKind.Ghost) { IconOnly = true, AutoSize = false };
             copy.SetBounds(x + w - S(36), y + 1, S(34), S(34));
             copy.Click += (_, _) =>
@@ -47,7 +47,7 @@ public sealed class HashForm : Form
             y += S(46);
         }
         y += S(8);
-        var expectedCaption = DialogParts.FieldLabel("So sánh với");
+        var expectedCaption = DialogParts.FieldLabel(L.T("So sánh với"));
         expectedCaption.Location = new Point(x, y);
         y += S(24);
         _expected.SetBounds(x, y, w, S(38));
@@ -57,7 +57,7 @@ public sealed class HashForm : Form
 
         Controls.Add(body);
         Controls.Add(DialogParts.Footer(this, close));
-        Controls.Add(DialogParts.Header(this, IconKind.Shield, Theme.Success, Path.GetFileName(path), "Đối chiếu mã băm để chắc tệp không bị hỏng hay bị tráo."));
+        Controls.Add(DialogParts.Header(this, IconKind.Shield, Theme.Success, Path.GetFileName(path), L.T("Đối chiếu mã băm để chắc tệp không bị hỏng hay bị tráo.")));
 
         _expected.TextChanged += (_, _) => Compare();
         Shown += async (_, _) =>
@@ -80,7 +80,7 @@ public sealed class HashForm : Form
     {
         try
         {
-            var progress = new Progress<double>(p => _sha256.Text = $"Đang tính… {p:P0}");
+            var progress = new Progress<double>(p => _sha256.Text = L.F("Đang tính… {0:P0}", p));
             _hashes = await FileHasher.ComputeAsync(_path, progress, _cts.Token);
             _md5.Text = _hashes.Md5;
             _sha1.Text = _hashes.Sha1;
@@ -94,7 +94,7 @@ public sealed class HashForm : Form
         {
             _md5.Text = _sha1.Text = _sha256.Text = "";
             _verdict.ForeColor = Theme.Danger;
-            _verdict.Text = "Không đọc được tệp: " + e.Message;
+            _verdict.Text = L.T("Không đọc được tệp: ") + e.Message;
         }
     }
 
@@ -107,7 +107,7 @@ public sealed class HashForm : Form
         }
         var match = FileHasher.Match(_expected.Text, _hashes);
         _verdict.ForeColor = match is null ? Theme.Danger : Theme.Success;
-        _verdict.Text = match is null ? "✗  Không khớp — tệp có thể bị hỏng hoặc không đúng bản gốc." : $"✓  Khớp {match}. Tệp đúng với bản gốc.";
+        _verdict.Text = match is null ? L.T("✗  Không khớp — tệp có thể bị hỏng hoặc không đúng bản gốc.") : L.F("✓  Khớp {0}. Tệp đúng với bản gốc.", match);
     }
 
     private static void TrySetClipboard(string text)

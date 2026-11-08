@@ -15,17 +15,17 @@ public sealed class ChannelsForm : Form
         BorderStyle = BorderStyle.None,
         MultiSelect = true,
     };
-    private readonly ModernButton _remove = new("Bỏ theo dõi", IconKind.Trash);
-    private readonly ModernButton _check = new("Kiểm tra ngay", IconKind.Refresh, ButtonKind.Primary);
+    private readonly ModernButton _remove = new(L.T("Bỏ theo dõi"), IconKind.Trash);
+    private readonly ModernButton _check = new(L.T("Kiểm tra ngay"), IconKind.Refresh, ButtonKind.Primary);
     private readonly Label _status = new() { AutoSize = true };
 
     public ChannelsForm(IReadOnlyList<FollowedChannel> channels)
     {
-        Text = "Kênh YouTube đang theo dõi";
+        Text = L.T("Kênh YouTube đang theo dõi");
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(640, 420));
         int S(int v) => Theme.Scale(this, v);
-        var close = new ModernButton("Đóng", IconKind.None, ButtonKind.Ghost) { DialogResult = DialogResult.Cancel };
+        var close = new ModernButton(L.T("Đóng"), IconKind.None, ButtonKind.Ghost) { DialogResult = DialogResult.Cancel };
         CancelButton = close;
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface, Padding = new Padding(S(24), S(4), S(24), S(8)) };
@@ -34,13 +34,13 @@ public sealed class ChannelsForm : Form
         _list.BackColor = Theme.Surface;
         _list.ForeColor = Theme.Text;
         _list.Font = Theme.Body;
-        _list.Columns.Add("Kênh / playlist", S(300));
-        _list.Columns.Add("Chất lượng", S(130));
-        _list.Columns.Add("Kiểm tra lần cuối", S(150));
+        _list.Columns.Add(L.T("Kênh / playlist"), S(300));
+        _list.Columns.Add(L.T("Chất lượng"), S(130));
+        _list.Columns.Add(L.T("Kiểm tra lần cuối"), S(150));
         foreach (var c in channels)
         {
             var quality = MediaQualities.For(null).FirstOrDefault(q => q.Value == c.Quality).Label ?? c.Quality;
-            var last = c.LastCheck?.ToLocalTime().ToString("HH:mm dd/MM", System.Globalization.CultureInfo.InvariantCulture) ?? "chưa";
+            var last = c.LastCheck?.ToLocalTime().ToString("HH:mm dd/MM", System.Globalization.CultureInfo.InvariantCulture) ?? L.T("chưa");
             _list.Items.Add(new ListViewItem([c.Title, quality, last]) { Tag = c.Url, ToolTipText = c.Url });
         }
         Theme.StyleScrollbars(_list);
@@ -50,15 +50,15 @@ public sealed class ChannelsForm : Form
         _status.Dock = DockStyle.Bottom;
         _status.Padding = new Padding(0, S(6), 0, 0);
         _status.Text = channels.Count == 0
-            ? "Chưa theo dõi kênh nào. Mở trang kênh YouTube, bấm chuột phải › “Tải cả playlist/kênh này bằng DoMa…” rồi tích “Theo dõi”."
-            : "DoMa kiểm tra mỗi 3 giờ khi đang chạy, có video mới thì tự tải vào thư mục Video.";
+            ? L.T("Chưa theo dõi kênh nào. Mở trang kênh YouTube, bấm chuột phải › “Tải cả playlist/kênh này bằng DoMa…” rồi tích “Theo dõi”.")
+            : L.T("DoMa kiểm tra mỗi 3 giờ khi đang chạy, có video mới thì tự tải vào thư mục Video.");
         _status.MaximumSize = new Size(S(590), 0);
         body.Controls.Add(frame);
         body.Controls.Add(_status);
 
         Controls.Add(body);
         Controls.Add(DialogParts.Footer(this, close, _check, _remove));
-        Controls.Add(DialogParts.Header(this, IconKind.Refresh, Theme.Accent, Text, "Video mới của các kênh này được tải tự động."));
+        Controls.Add(DialogParts.Header(this, IconKind.Refresh, Theme.Accent, Text, L.T("Video mới của các kênh này được tải tự động.")));
 
         _remove.Enabled = false;
         _check.Enabled = channels.Count > 0;
@@ -77,11 +77,11 @@ public sealed class ChannelsForm : Form
             if (CheckNow is null)
                 return;
             _check.Enabled = false;
-            _status.Text = "Đang kiểm tra…";
+            _status.Text = L.T("Đang kiểm tra…");
             var added = await CheckNow();
             if (IsDisposed)
                 return;
-            _status.Text = added > 0 ? $"Đã thêm {added} video mới vào danh sách." : "Chưa có video mới.";
+            _status.Text = added > 0 ? L.F("Đã thêm {0} video mới vào danh sách.", added) : L.T("Chưa có video mới.");
             _check.Enabled = _list.Items.Count > 0;
         };
     }

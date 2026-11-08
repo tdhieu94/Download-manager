@@ -28,7 +28,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             if (playlist.Unsupported is { } reason)
                 return new EngineResult(EngineOutcome.Failed, null, reason);
             if (!playlist.Ended)
-                return new EngineResult(EngineOutcome.Failed, null, "Đây là video phát trực tiếp, DoMa chỉ tải được video đã phát xong.");
+                return new EngineResult(EngineOutcome.Failed, null, L.T("Đây là video phát trực tiếp, DoMa chỉ tải được video đã phát xong."));
 
             var units = new List<(Uri Uri, HlsSegment? Segment)>();
             if (playlist.InitSegment is { } init)
@@ -77,7 +77,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new EngineResult(EngineOutcome.Failed, null, $"Không ghi được tệp: {ex.Message}");
+            return new EngineResult(EngineOutcome.Failed, null, L.F("Không ghi được tệp: {0}", ex.Message));
         }
     }
 
@@ -147,7 +147,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
                 return (playlist, finalUrl);
             url = playlist.Best()!.Uri;
         }
-        throw new HlsException("Danh sách phát lồng nhau quá nhiều cấp.");
+        throw new HlsException(L.T("Danh sách phát lồng nhau quá nhiều cấp."));
     }
 
     private async Task<(string Text, Uri FinalUrl)> GetTextAsync(DownloadRequest req, Uri url, CancellationToken ct)
@@ -164,7 +164,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             return data;
         var secret = await keys.GetOrAdd(key.Uri, k => GetBytesAsync(req, k, ct));
         if (secret.Length != 16)
-            throw new HlsException("Khoá giải mã video không hợp lệ.");
+            throw new HlsException(L.T("Khoá giải mã video không hợp lệ."));
         var iv = key.Iv ?? SequenceIv(segment.Sequence);
         try
         {
@@ -174,7 +174,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
         }
         catch (CryptographicException)
         {
-            throw new HlsException("Không giải mã được một đoạn video.");
+            throw new HlsException(L.T("Không giải mã được một đoạn video."));
         }
     }
 
@@ -202,7 +202,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
             {
                 using var resp = await RequestSender.SendAsync(http, req, uri.AbsoluteUri, null, ct);
                 if (resp.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized or HttpStatusCode.Gone or HttpStatusCode.NotFound)
-                    throw new HlsException("Link video đã hết hạn hoặc bị chặn. Bấm chuột phải › Làm mới link để tải tiếp.");
+                    throw new HlsException(L.T("Link video đã hết hạn hoặc bị chặn. Bấm chuột phải › Làm mới link để tải tiếp."));
                 resp.EnsureSuccessStatusCode();
                 var data = await resp.Content.ReadAsByteArrayAsync(ct);
                 if (Limiter is not null)
@@ -213,7 +213,7 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
                                        || (ex is OperationCanceledException && !ct.IsCancellationRequested))
             {
                 if (attempt >= MaxAttempts)
-                    throw new HlsException("Mất kết nối khi tải video. Bấm tải tiếp để thử lại.", network: true);
+                    throw new HlsException(L.T("Mất kết nối khi tải video. Bấm tải tiếp để thử lại."), network: true);
                 await _delay(TimeSpan.FromSeconds(Math.Min(10, attempt * 2)), ct);
             }
         }

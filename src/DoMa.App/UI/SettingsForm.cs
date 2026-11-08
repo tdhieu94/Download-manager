@@ -10,33 +10,35 @@ public sealed class SettingsForm : Form
     private static readonly Category[] Listed = [Category.Document, Category.Software, Category.Archive, Category.Media];
 
     private readonly InputBox _root = new(IconKind.Folder);
-    private readonly ModernButton _browse = new("Chọn…");
+    private readonly ModernButton _browse = new(L.T("Chọn…"));
     private readonly Dictionary<Category, InputBox> _extensions = Listed.ToDictionary(c => c, c => new InputBox(Theme.CategoryIcon(c)));
     private readonly NumericUpDown _connections = new() { Minimum = 1, Maximum = 32 };
     private readonly NumericUpDown _concurrent = new() { Minimum = 1, Maximum = 10 };
     private readonly NumericUpDown _speed = new() { Minimum = 0, Maximum = 1_000_000, Increment = 256, ThousandsSeparator = true };
-    private readonly ToggleSwitch _schedule = new("Tải theo lịch hằng ngày", "Tự bắt đầu các tệp “Chờ tải sau” vào giờ hẹn, tự đưa về hàng chờ khi tới giờ dừng");
+    private readonly ToggleSwitch _schedule = new(L.T("Tải theo lịch hằng ngày"), L.T("Tự bắt đầu các tệp “Chờ tải sau” vào giờ hẹn, tự đưa về hàng chờ khi tới giờ dừng"));
     private readonly InputBox _scheduleStart = new(IconKind.Clock) { PlaceholderText = "23:00" };
-    private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = "Để trống = không dừng" };
-    private static readonly (string Value, string Text)[] Appearances = [("System", "Theo Windows"), ("Light", "Sáng"), ("Dark", "Tối")];
+    private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = L.T("Để trống = không dừng") };
+    private static readonly (string Value, string Text)[] Appearances = [("System", L.T("Theo Windows")), ("Light", L.T("Sáng")), ("Dark", L.T("Tối"))];
+    private static readonly (string Value, string Text)[] Languages = [("auto", L.T("Theo Windows")), ("vi", "Tiếng Việt"), ("en", "English")];
     private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
-    private readonly ToggleSwitch _warn = new("Cảnh báo trước khi tải", "Báo khi tệp là chương trình, giả dạng đuôi khác hoặc tải từ nguồn đáng ngờ");
-    private readonly ToggleSwitch _scan = new("Quét bằng Windows Defender", "Quét mỗi tệp vừa tải xong; báo ngay nếu phát hiện mối nguy");
-    private readonly ToggleSwitch _mp4 = new("Tự chuyển video .ts sang .mp4", "Video tải từ luồng (HLS) được đổi sang .mp4 để mở trên mọi máy, không giảm chất lượng");
-    private readonly ToggleSwitch _extract = new("Tự giải nén tệp .zip", "Giải nén vào thư mục cùng tên, cạnh tệp vừa tải");
-    private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
-    private readonly ToggleSwitch _network = new("Tự tải tiếp khi có mạng lại", "Tệp bị lỗi vì mất mạng sẽ tự chạy tiếp, không cần bấm lại");
-    private readonly ToggleSwitch _clipboard = new("Bắt link khi copy", "Copy một link tải (.zip, .exe, .mp4…) là DoMa đề nghị tải giúp");
-    private readonly ToggleSwitch _notify = new("Thông báo khi tải xong", "Hiện thông báo ở góc màn hình khi một tệp tải xong");
-    private readonly ToggleSwitch _updates = new("Tự động kiểm tra cập nhật", "Báo khi có phiên bản DoMa mới trên GitHub");
-    private readonly ModernButton _save = new("Lưu", IconKind.Check, ButtonKind.Primary) { DialogResult = DialogResult.OK };
-    private readonly ModernButton _cancel = new("Huỷ", IconKind.None, ButtonKind.Ghost) { DialogResult = DialogResult.Cancel };
+    private readonly ComboBox _language = new() { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
+    private readonly ToggleSwitch _warn = new(L.T("Cảnh báo trước khi tải"), L.T("Báo khi tệp là chương trình, giả dạng đuôi khác hoặc tải từ nguồn đáng ngờ"));
+    private readonly ToggleSwitch _scan = new(L.T("Quét bằng Windows Defender"), L.T("Quét mỗi tệp vừa tải xong; báo ngay nếu phát hiện mối nguy"));
+    private readonly ToggleSwitch _mp4 = new(L.T("Tự chuyển video .ts sang .mp4"), L.T("Video tải từ luồng (HLS) được đổi sang .mp4 để mở trên mọi máy, không giảm chất lượng"));
+    private readonly ToggleSwitch _extract = new(L.T("Tự giải nén tệp .zip"), L.T("Giải nén vào thư mục cùng tên, cạnh tệp vừa tải"));
+    private readonly ToggleSwitch _startup = new(L.T("Chạy cùng Windows"), L.T("Tự khởi động và ẩn dưới khay hệ thống"));
+    private readonly ToggleSwitch _network = new(L.T("Tự tải tiếp khi có mạng lại"), L.T("Tệp bị lỗi vì mất mạng sẽ tự chạy tiếp, không cần bấm lại"));
+    private readonly ToggleSwitch _clipboard = new(L.T("Bắt link khi copy"), L.T("Copy một link tải (.zip, .exe, .mp4…) là DoMa đề nghị tải giúp"));
+    private readonly ToggleSwitch _notify = new(L.T("Thông báo khi tải xong"), L.T("Hiện thông báo ở góc màn hình khi một tệp tải xong"));
+    private readonly ToggleSwitch _updates = new(L.T("Tự động kiểm tra cập nhật"), L.T("Báo khi có phiên bản DoMa mới trên GitHub"));
+    private readonly ModernButton _save = new(L.T("Lưu"), IconKind.Check, ButtonKind.Primary) { DialogResult = DialogResult.OK };
+    private readonly ModernButton _cancel = new(L.T("Huỷ"), IconKind.None, ButtonKind.Ghost) { DialogResult = DialogResult.Cancel };
     private readonly Settings _source;
 
     public SettingsForm(Settings current)
     {
         _source = current;
-        Text = "Cài đặt";
+        Text = L.T("Cài đặt");
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(640, 712));
         AcceptButton = _save;
@@ -76,10 +78,10 @@ public sealed class SettingsForm : Form
             y += S(48);
         }
 
-        Section("Lưu trữ");
-        Field("Thư mục gốc", _root, _browse);
+        Section(L.T("Lưu trữ"));
+        Field(L.T("Thư mục gốc"), _root, _browse);
 
-        Section("Phân loại theo đuôi file");
+        Section(L.T("Phân loại theo đuôi file"));
         foreach (var category in Listed)
         {
             var caption = DialogParts.FieldLabel(Theme.CategoryName(category));
@@ -89,17 +91,17 @@ public sealed class SettingsForm : Form
             body.Controls.Add(_extensions[category]);
             y += S(44);
         }
-        var hint = DialogParts.Hint("Các đuôi cách nhau bằng dấu phẩy; đuôi không có trong danh sách rơi vào Khác.");
+        var hint = DialogParts.Hint(L.T("Các đuôi cách nhau bằng dấu phẩy; đuôi không có trong danh sách rơi vào Khác."));
         hint.Location = new Point(x + S(101), y - S(2));
         body.Controls.Add(hint);
         y += S(34);
 
-        Section("Hiệu suất");
+        Section(L.T("Hiệu suất"));
         var half = (w - S(16)) / 2;
         StyleNumber(_connections);
         StyleNumber(_concurrent);
-        var connCaption = DialogParts.FieldLabel("Số kết nối mỗi file (1–32)");
-        var concCaption = DialogParts.FieldLabel("Số file tải cùng lúc (1–10)");
+        var connCaption = DialogParts.FieldLabel(L.T("Số kết nối mỗi file (1–32)"));
+        var concCaption = DialogParts.FieldLabel(L.T("Số file tải cùng lúc (1–10)"));
         connCaption.Location = new Point(x, y);
         concCaption.Location = new Point(x + half + S(16), y);
         y += S(24);
@@ -108,9 +110,9 @@ public sealed class SettingsForm : Form
         body.Controls.AddRange([connCaption, concCaption, _connections, _concurrent]);
         y += S(50);
 
-        Section("Tốc độ và lịch tải");
+        Section(L.T("Tốc độ và lịch tải"));
         StyleNumber(_speed);
-        var speedCaption = DialogParts.FieldLabel("Tốc độ tối đa, KB/s (0 = không giới hạn)");
+        var speedCaption = DialogParts.FieldLabel(L.T("Tốc độ tối đa, KB/s (0 = không giới hạn)"));
         speedCaption.Location = new Point(x, y);
         y += S(24);
         _speed.SetBounds(x, y, half, S(30));
@@ -119,8 +121,8 @@ public sealed class SettingsForm : Form
         _schedule.SetBounds(x, y, w, S(46));
         body.Controls.Add(_schedule);
         y += S(52);
-        var startCaption = DialogParts.FieldLabel("Bắt đầu lúc (giờ:phút)");
-        var stopCaption = DialogParts.FieldLabel("Dừng lúc");
+        var startCaption = DialogParts.FieldLabel(L.T("Bắt đầu lúc (giờ:phút)"));
+        var stopCaption = DialogParts.FieldLabel(L.T("Dừng lúc"));
         startCaption.Location = new Point(x, y);
         stopCaption.Location = new Point(x + half + S(16), y);
         y += S(24);
@@ -130,7 +132,7 @@ public sealed class SettingsForm : Form
         y += S(54);
         _schedule.CheckedChanged += (_, _) => _scheduleStart.Enabled = _scheduleStop.Enabled = _schedule.Checked;
 
-        Section("Bảo mật và sau khi tải");
+        Section(L.T("Bảo mật và sau khi tải"));
         _warn.SetBounds(x, y, w, S(46));
         y += S(50);
         _scan.SetBounds(x, y, w, S(46));
@@ -141,8 +143,8 @@ public sealed class SettingsForm : Form
         y += S(56);
         body.Controls.AddRange([_warn, _scan, _extract, _mp4]);
 
-        Section("Giao diện");
-        var appearanceCaption = DialogParts.FieldLabel("Chế độ màu (áp dụng khi mở lại DoMa)");
+        Section(L.T("Giao diện"));
+        var appearanceCaption = DialogParts.FieldLabel(L.T("Chế độ màu (áp dụng khi mở lại DoMa)"));
         appearanceCaption.Location = new Point(x, y);
         y += S(24);
         _appearance.Font = Theme.Body;
@@ -152,8 +154,18 @@ public sealed class SettingsForm : Form
         _appearance.SetBounds(x, y, half, S(30));
         body.Controls.AddRange([appearanceCaption, _appearance]);
         y += S(50);
+        var languageCaption = DialogParts.FieldLabel(L.T("Ngôn ngữ / Language (áp dụng khi mở lại DoMa)"));
+        languageCaption.Location = new Point(x, y);
+        y += S(24);
+        _language.Font = Theme.Body;
+        _language.BackColor = Theme.Surface;
+        _language.ForeColor = Theme.Text;
+        _language.Items.AddRange(Languages.Select(a => (object)a.Text).ToArray());
+        _language.SetBounds(x, y, half, S(30));
+        body.Controls.AddRange([languageCaption, _language]);
+        y += S(50);
 
-        Section("Hệ thống");
+        Section(L.T("Hệ thống"));
         _startup.SetBounds(x, y, w, S(46));
         y += S(50);
         _notify.SetBounds(x, y, w, S(46));
@@ -169,7 +181,7 @@ public sealed class SettingsForm : Form
 
         Controls.Add(body);
         Controls.Add(DialogParts.Footer(this, _save, _cancel));
-        Controls.Add(DialogParts.Header(this, IconKind.Settings, Theme.Accent, "Cài đặt", "Thư mục lưu, phân loại file và cách DoMa tải xuống."));
+        Controls.Add(DialogParts.Header(this, IconKind.Settings, Theme.Accent, L.T("Cài đặt"), L.T("Thư mục lưu, phân loại file và cách DoMa tải xuống.")));
 
         _root.Text = current.RootFolder;
         foreach (var category in Listed)
@@ -182,6 +194,7 @@ public sealed class SettingsForm : Form
         _network.Checked = current.AutoResumeOnNetwork;
         _updates.Checked = current.AutoCheckUpdates;
         _appearance.SelectedIndex = Math.Max(0, Array.FindIndex(Appearances, a => string.Equals(a.Value, current.Appearance, StringComparison.OrdinalIgnoreCase)));
+        _language.SelectedIndex = Math.Max(0, Array.FindIndex(Languages, a => string.Equals(a.Value, current.Language, StringComparison.OrdinalIgnoreCase)));
         _warn.Checked = current.WarnBeforeDownload;
         _scan.Checked = current.ScanAfterDownload;
         _extract.Checked = current.AutoExtractZip;
@@ -197,21 +210,21 @@ public sealed class SettingsForm : Form
         {
             if (!Path.IsPathRooted(_root.Text.Trim()))
             {
-                MessageBox.Show(this, "Thư mục gốc không hợp lệ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, L.T("Thư mục gốc không hợp lệ."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
                 _root.Box.Focus();
                 return;
             }
             if (_schedule.Checked && !ScheduleClock.TryParse(_scheduleStart.Text, out _))
             {
-                MessageBox.Show(this, "Giờ bắt đầu không hợp lệ. Hãy nhập dạng 23:00.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, L.T("Giờ bắt đầu không hợp lệ. Hãy nhập dạng 23:00."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
                 _scheduleStart.Box.Focus();
                 return;
             }
             if (_schedule.Checked && _scheduleStop.Text.Trim().Length > 0 && !ScheduleClock.TryParse(_scheduleStop.Text, out _))
             {
-                MessageBox.Show(this, "Giờ dừng không hợp lệ. Hãy nhập dạng 07:00 hoặc để trống.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, L.T("Giờ dừng không hợp lệ. Hãy nhập dạng 07:00 hoặc để trống."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
                 _scheduleStop.Box.Focus();
             }
@@ -251,6 +264,7 @@ public sealed class SettingsForm : Form
             AutoExtractZip = _extract.Checked,
             ConvertTsToMp4 = _mp4.Checked,
             Appearance = Appearances[Math.Max(0, _appearance.SelectedIndex)].Value,
+            Language = Languages[Math.Max(0, _language.SelectedIndex)].Value,
             ScheduleEnabled = _schedule.Checked,
             ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart,
             ScheduleStop = _scheduleStop.Text.Trim().Length > 0 ? _scheduleStop.Text.Trim() : null,

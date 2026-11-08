@@ -50,14 +50,14 @@ public static class MediaQualities
     public static IReadOnlyList<(string Value, string Label)> For(IReadOnlyList<int>? heights)
     {
         var max = heights is { Count: > 0 } ? heights.Max() : (int?)null;
-        var list = new List<(string, string)> { (MediaOptions.Best, max is { } m ? $"Cao nhất ({Name(m)})" : "Cao nhất có thể") };
+        var list = new List<(string, string)> { (MediaOptions.Best, max is { } m ? L.F("Cao nhất ({0})", Name(m)) : L.T("Cao nhất có thể")) };
         foreach (var h in Standard)
         {
             // Chỉ liệt kê mức thấp hơn mức cao nhất của video (mức cao nhất đã nằm ở dòng đầu).
             if (max is null ? h <= 1080 : h < max && heights!.Any(x => x >= h))
                 list.Add((h.ToString(System.Globalization.CultureInfo.InvariantCulture), Name(h)));
         }
-        list.Add((MediaOptions.Audio, "Chỉ âm thanh (MP3)"));
+        list.Add((MediaOptions.Audio, L.T("Chỉ âm thanh (MP3)")));
         return list;
     }
 

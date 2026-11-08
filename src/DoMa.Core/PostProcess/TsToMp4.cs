@@ -94,9 +94,9 @@ public static class TsToMp4
                 Flush(pid);
 
             if (_video.Count == 0)
-                throw new NotSupportedException(_videoPid < 0 ? "Không tìm thấy hình H.264 trong tệp." : "Tệp không có khung hình nào.");
+                throw new NotSupportedException(_videoPid < 0 ? L.T("Không tìm thấy hình H.264 trong tệp.") : L.T("Tệp không có khung hình nào."));
             if (_video.Sps is null || _video.Pps is null)
-                throw new NotSupportedException("Thiếu thông tin giải mã H.264 (SPS/PPS).");
+                throw new NotSupportedException(L.T("Thiếu thông tin giải mã H.264 (SPS/PPS)."));
 
             var mdatEnd = target.Position;
             target.Position = _mdatStart + 8;
@@ -202,7 +202,7 @@ public static class TsToMp4
                 i += 5 + esInfo;
             }
             if (_videoPid < 0 && otherVideo)
-                throw new NotSupportedException("Video không dùng H.264 (ví dụ HEVC), DoMa giữ nguyên tệp .ts.");
+                throw new NotSupportedException(L.T("Video không dùng H.264 (ví dụ HEVC), DoMa giữ nguyên tệp .ts."));
         }
 
         private static bool ParsePesHeader(ReadOnlySpan<byte> s, Pes pes, out int headerLength)

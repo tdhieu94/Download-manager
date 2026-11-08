@@ -76,7 +76,7 @@ internal sealed class UpdateService : IDisposable
             if (release is null || !ReleaseParser.IsNewer(release, _current))
             {
                 if (manual)
-                    Message($"Bạn đang dùng phiên bản mới nhất ({CurrentVersion}).", MessageBoxIcon.Information);
+                    Message(L.F("Bạn đang dùng phiên bản mới nhất ({0}).", CurrentVersion), MessageBoxIcon.Information);
                 return;
             }
             if (!manual && (release.Version == _dismissed || release.Version == _announced))
@@ -89,7 +89,7 @@ internal sealed class UpdateService : IDisposable
                 return;
             _log.Write("update", e, null);
             if (manual)
-                Message("Không kiểm tra được bản cập nhật. Hãy kiểm tra kết nối mạng rồi thử lại.", MessageBoxIcon.Warning);
+                Message(L.T("Không kiểm tra được bản cập nhật. Hãy kiểm tra kết nối mạng rồi thử lại."), MessageBoxIcon.Warning);
         }
         finally
         {
@@ -100,11 +100,11 @@ internal sealed class UpdateService : IDisposable
     private void Announce(ReleaseInfo release, bool manual)
     {
         _announced = release.Version;
-        var title = $"Đã có DoMa {release.Version}";
-        var detail = $"Bạn đang dùng bản {CurrentVersion}. Cập nhật mất chưa tới một phút, các tệp đang tải sẽ tự tải tiếp.";
+        var title = L.F("Đã có DoMa {0}", release.Version);
+        var detail = L.F("Bạn đang dùng bản {0}. Cập nhật mất chưa tới một phút, các tệp đang tải sẽ tự tải tiếp.", CurrentVersion);
         _form.ShowUpdate(title, detail, () => _ = InstallAsync(release), () => _dismissed = release.Version, () => ShowNotes(release));
         if (manual || !_form.Visible || !_form.ContainsFocus)
-            _tray.Notify($"{title}. Bấm để xem có gì mới.", () => ShowNotes(release));
+            _tray.Notify(L.F("{0}. Bấm để xem có gì mới.", title), () => ShowNotes(release));
         if (manual)
             ShowNotes(release);
     }
@@ -135,10 +135,10 @@ internal sealed class UpdateService : IDisposable
         _installing = true;
         try
         {
-            _form.SetUpdateStatus("Đang tải bộ cài…", busy: true);
-            var progress = new Progress<double>(p => _form.SetUpdateStatus($"Đang tải bộ cài… {p:P0}", busy: true));
+            _form.SetUpdateStatus(L.T("Đang tải bộ cài…"), busy: true);
+            var progress = new Progress<double>(p => _form.SetUpdateStatus(L.F("Đang tải bộ cài… {0:P0}", p), busy: true));
             var setup = await _client.DownloadSetupAsync(release, progress, _cts.Token);
-            _form.SetUpdateStatus("Đang cài đặt, DoMa sẽ tự mở lại…", busy: true);
+            _form.SetUpdateStatus(L.T("Đang cài đặt, DoMa sẽ tự mở lại…"), busy: true);
             Process.Start(new ProcessStartInfo(setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /UPDATE=1") { UseShellExecute = true });
             _exitForUpdate();
         }
@@ -148,8 +148,8 @@ internal sealed class UpdateService : IDisposable
                 return;
             _log.Write("update", e, null);
             _installing = false;
-            _form.SetUpdateStatus("Cập nhật chưa thành công. Bấm “Cập nhật ngay” để thử lại.", busy: false);
-            var manual = release.PageUrl is null ? "" : "\n\nNếu vẫn lỗi, bạn có thể tải bộ cài trực tiếp tại:\n" + release.PageUrl;
+            _form.SetUpdateStatus(L.T("Cập nhật chưa thành công. Bấm “Cập nhật ngay” để thử lại."), busy: false);
+            var manual = release.PageUrl is null ? "" : L.T("\n\nNếu vẫn lỗi, bạn có thể tải bộ cài trực tiếp tại:\n") + release.PageUrl;
             Message(UpdateErrors.Describe(e) + manual, MessageBoxIcon.Warning);
         }
     }

@@ -56,29 +56,29 @@ public static class DownloadRisk
         var executable = Executable.Contains(ext);
 
         if (name.IndexOfAny(HiddenChars) >= 0)
-            Add(RiskLevel.High, "Tên tệp chứa ký tự ẩn để giả dạng đuôi tệp khác.");
+            Add(RiskLevel.High, L.T("Tên tệp chứa ký tự ẩn để giả dạng đuôi tệp khác."));
 
         var inner = Path.GetExtension(Path.GetFileNameWithoutExtension(name));
         if (executable && Disguise.Contains(inner))
-            Add(RiskLevel.High, $"Tệp giả dạng \"{inner}\" nhưng thực chất là tệp chạy được ({ext}).");
+            Add(RiskLevel.High, L.F("Tệp giả dạng \"{0}\" nhưng thực chất là tệp chạy được ({1}).", inner, ext));
         else if (executable && name.Contains("     ", StringComparison.Ordinal))
-            Add(RiskLevel.High, "Tên tệp có nhiều khoảng trắng liên tiếp để che đuôi thật.");
+            Add(RiskLevel.High, L.T("Tên tệp có nhiều khoảng trắng liên tiếp để che đuôi thật."));
 
         var type = contentType?.Split(';')[0].Trim() ?? "";
         if (!executable && ExecutableContentTypes.Contains(type, StringComparer.OrdinalIgnoreCase))
-            Add(RiskLevel.High, $"Máy chủ gửi về một chương trình chạy được, không khớp với tên tệp \"{ext}\".");
+            Add(RiskLevel.High, L.F("Máy chủ gửi về một chương trình chạy được, không khớp với tên tệp \"{0}\".", ext));
 
         var source = Uri.TryCreate(url, UriKind.Absolute, out var u) ? u : null;
         var final = Uri.TryCreate(finalUrl, UriKind.Absolute, out var f) ? f : source;
         if (executable)
-            Add(RiskLevel.Caution, $"Đây là tệp chạy được ({ext}){(final is null ? "" : $" từ {final.Host}")}. Chỉ mở nếu bạn tin nguồn tải.");
+            Add(RiskLevel.Caution, L.F("Đây là tệp chạy được ({0}){1}. Chỉ mở nếu bạn tin nguồn tải.", ext, (final is null ? "" : L.F(" từ {0}", final.Host))));
 
         if (final is not null)
         {
             if (executable && final.Scheme == Uri.UriSchemeHttp)
-                Add(RiskLevel.Caution, "Tệp chạy được tải qua kết nối không mã hoá (http), có thể bị tráo trên đường truyền.");
+                Add(RiskLevel.Caution, L.T("Tệp chạy được tải qua kết nối không mã hoá (http), có thể bị tráo trên đường truyền."));
             if (IPAddress.TryParse(final.Host.Trim('[', ']'), out var ip) && !IPAddress.IsLoopback(ip))
-                Add(RiskLevel.Caution, $"Link trỏ thẳng tới địa chỉ IP ({final.Host}) thay vì tên miền.");
+                Add(RiskLevel.Caution, L.F("Link trỏ thẳng tới địa chỉ IP ({0}) thay vì tên miền.", final.Host));
         }
 
         return reasons.Count == 0 ? RiskReport.Safe : new RiskReport(level, reasons);

@@ -25,7 +25,7 @@ public class CaptureCoordinator(
     Func<CategoryResolver> categories,
     Action<string> notify)
 {
-    private const string BrowserTookOverMessage = "Trình duyệt đã tự tải lại tệp này vì mất kết nối với DoMa.";
+    private static string BrowserTookOverMessage => L.T("Trình duyệt đã tự tải lại tệp này vì mất kết nối với DoMa.");
 
     private readonly object _gate = new();
     private readonly HashSet<string> _reserved = new(StringComparer.OrdinalIgnoreCase);

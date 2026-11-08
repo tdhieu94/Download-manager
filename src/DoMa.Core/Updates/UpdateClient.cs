@@ -43,7 +43,7 @@ public sealed class UpdateClient : IDisposable
         if (expected is null && release.Sha256Url is not null)
             expected = ReleaseParser.ParseShaFile(await UpdateErrors.RetryAsync(c => _http.GetStringAsync(release.Sha256Url, c), ct));
         if (expected is null)
-            throw new InvalidDataException("Bản phát hành không có mã SHA-256 để kiểm tra bộ cài.");
+            throw new InvalidDataException(L.T("Bản phát hành không có mã SHA-256 để kiểm tra bộ cài."));
 
         var dir = Path.Combine(Path.GetTempPath(), "DoMa-Update");
         Directory.CreateDirectory(dir);
@@ -58,7 +58,7 @@ public sealed class UpdateClient : IDisposable
         if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
         {
             File.Delete(temp);
-            throw new InvalidDataException("Bộ cài tải về không khớp mã SHA-256, đã huỷ cập nhật.");
+            throw new InvalidDataException(L.T("Bộ cài tải về không khớp mã SHA-256, đã huỷ cập nhật."));
         }
         File.Move(temp, target, true);
         return target;

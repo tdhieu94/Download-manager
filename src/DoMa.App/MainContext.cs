@@ -46,6 +46,7 @@ internal sealed class MainContext : ApplicationContext
         Directory.CreateDirectory(AppPaths.DataDir);
         Directory.CreateDirectory(AppPaths.StatesDir);
         _settings = _settingsStore.Load();
+        L.Use(_settings.Language);
         _limiter.LimitBytesPerSec = _settings.SpeedLimitKBps * 1024L;
         Theme.Use(Enum.TryParse<ThemeMode>(_settings.Appearance, true, out var mode) ? mode : ThemeMode.System);
 
@@ -90,7 +91,7 @@ internal sealed class MainContext : ApplicationContext
         _form.WaitForNewLink = item =>
         {
             _refresh.Arm(item.Id);
-            _tray?.Toast("Đang chờ link mới", $"Bấm tải “{Path.GetFileName(item.TargetPath)}” trên trang vừa mở, DoMa sẽ tải tiếp phần còn lại.", ToolTipIcon.None, null, 10);
+            _tray?.Toast(L.T("Đang chờ link mới"), L.F("Bấm tải “{0}” trên trang vừa mở, DoMa sẽ tải tiếp phần còn lại.", Path.GetFileName(item.TargetPath)), ToolTipIcon.None, null, 10);
         };
         _schedule = new ScheduleService(_manager, () => _settings, text => _tray?.Notify(text, ShowNow), ConfirmPower);
         _form.QuickActions = new QuickActions(
@@ -109,7 +110,7 @@ internal sealed class MainContext : ApplicationContext
         _clipboard = new Capture.ClipboardWatcher(
             () => _settings.WatchClipboard,
             () => _settings.Extensions.Values.SelectMany(v => v),
-            url => _tray.Toast("Bắt được link vừa copy", $"{LinkName(url)} · Bấm để tải bằng DoMa", ToolTipIcon.None, () => _ = AddLinkAsync(url), 10));
+            url => _tray.Toast(L.T("Bắt được link vừa copy"), L.F("{0} · Bấm để tải bằng DoMa", LinkName(url)), ToolTipIcon.None, () => _ = AddLinkAsync(url), 10));
         _ = _form.Handle;
         if (!hidden)
             _form.Show();
@@ -171,10 +172,10 @@ internal sealed class MainContext : ApplicationContext
         var asked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ui.Post(_ =>
         {
-            var text = "Để tải torrent, DoMa cần thêm công cụ miễn phí, mã nguồn mở aria2 "
-                + $"(khoảng {Core.Engine.YouTube.YouTubeTools.Aria2SizeMb} MB).\n\nDoMa sẽ tải nó từ GitHub một lần duy nhất. Tải ngay?\n\n"
-                + "Lưu ý: DoMa không chia sẻ lại (seed) sau khi tải xong. Chỉ tải nội dung bạn có quyền tải.";
-            const string caption = "Tải torrent";
+            var text = L.T("Để tải torrent, DoMa cần thêm công cụ miễn phí, mã nguồn mở aria2 ")
+                + L.F("(khoảng {0} MB).\n\nDoMa sẽ tải nó từ GitHub một lần duy nhất. Tải ngay?\n\n", Core.Engine.YouTube.YouTubeTools.Aria2SizeMb)
+                + L.T("Lưu ý: DoMa không chia sẻ lại (seed) sau khi tải xong. Chỉ tải nội dung bạn có quyền tải.");
+            var caption = L.T("Tải torrent");
             var answer = _form.Visible
                 ? MessageBox.Show(_form, text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question)
                 : MessageBox.Show(text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
@@ -191,7 +192,7 @@ internal sealed class MainContext : ApplicationContext
         catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or TaskCanceledException)
         {
             _log.Write("aria2", e, null);
-            _tray.Toast("Không tải được công cụ torrent", $"Kiểm tra kết nối mạng rồi thử lại. ({e.Message})", ToolTipIcon.Error, null, 10);
+            _tray.Toast(L.T("Không tải được công cụ torrent"), L.F("Kiểm tra kết nối mạng rồi thử lại. ({0})", e.Message), ToolTipIcon.Error, null, 10);
             return false;
         }
     }
@@ -234,7 +235,7 @@ internal sealed class MainContext : ApplicationContext
         var (info, error) = await _ytEngine.InfoAsync(req, ct);
         if (info is null)
         {
-            _tray.Toast($"Không tải được video {SiteOf(req.Url)}", error ?? "", ToolTipIcon.Warning, null, 10);
+            _tray.Toast(L.F("Không tải được video {0}", SiteOf(req.Url)), error ?? "", ToolTipIcon.Warning, null, 10);
             return MediaFailed();
         }
         var options = LastMedia;
@@ -246,11 +247,11 @@ internal sealed class MainContext : ApplicationContext
     {
         if (!await MediaToolsReadyAsync(CancellationToken.None))
             return false;
-        _tray.Toast("Đang đọc playlist", "DoMa đang lấy danh sách video…", ToolTipIcon.None, null, 5);
+        _tray.Toast(L.T("Đang đọc playlist"), L.T("DoMa đang lấy danh sách video…"), ToolTipIcon.None, null, 5);
         var (playlist, error) = await _ytEngine.PlaylistAsync(req, CancellationToken.None);
         if (playlist is null)
         {
-            _tray.Toast("Không đọc được playlist", error ?? "", ToolTipIcon.Warning, null, 10);
+            _tray.Toast(L.T("Không đọc được playlist"), error ?? "", ToolTipIcon.Warning, null, 10);
             return false;
         }
         var url = Core.Engine.YouTube.MediaLink.Normalize(req.Url);
@@ -264,12 +265,12 @@ internal sealed class MainContext : ApplicationContext
                 var links = playlist.Entries
                     .Select(e => new BatchLink(e.Url, FileNameResolver.Sanitize(e.Title), LinkKind.Media, "youtube.com"))
                     .ToList();
-                var more = playlist.Entries.Count >= Core.Engine.YouTube.YtDlp.MaxPlaylistItems ? $" (DoMa lấy tối đa {Core.Engine.YouTube.YtDlp.MaxPlaylistItems} video)" : "";
+                var more = playlist.Entries.Count >= Core.Engine.YouTube.YtDlp.MaxPlaylistItems ? L.F(" (DoMa lấy tối đa {0} video)", Core.Engine.YouTube.YtDlp.MaxPlaylistItems) : "";
                 var follow = following ? null
-                    : isChannel ? "Theo dõi kênh này: tự tải video mới khi kênh đăng"
-                    : "Theo dõi playlist này: tự tải video mới được thêm vào";
+                    : isChannel ? L.T("Theo dõi kênh này: tự tải video mới khi kênh đăng")
+                    : L.T("Theo dõi playlist này: tự tải video mới được thêm vào");
                 using var dialog = new UI.BatchForm(links, "", LastMedia, playlist.Title,
-                    $"{links.Count} video{more}. Tích chọn các video muốn tải{(following ? " (đang theo dõi)" : "")}.", follow, checkAll: !isChannel);
+                    L.F("{0} video{1}. Tích chọn các video muốn tải{2}.", links.Count, more, (following ? L.T(" (đang theo dõi)") : "")), follow, checkAll: !isChannel);
                 chosen.TrySetResult(dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK
                     ? (dialog.Selected, dialog.Media ?? LastMedia, dialog.StartNow, dialog.Follow)
                     : null);
@@ -286,9 +287,9 @@ internal sealed class MainContext : ApplicationContext
             Follow(url, playlist, pick.Media);
         var added = AddMedia(pick.Links.Select(l => (l.Url, (string?)l.FileName)), pick.Media, pick.StartNow, req.Cookies, req.UserAgent);
         if (added > 0)
-            _tray.Toast("Đã thêm playlist", $"{added} video · {playlist.Title}", ToolTipIcon.Info, ShowNow);
+            _tray.Toast(L.T("Đã thêm playlist"), $"{added} video · {playlist.Title}", ToolTipIcon.Info, ShowNow);
         else if (pick.Follow)
-            _tray.Toast("Đang theo dõi", $"{playlist.Title} · DoMa sẽ tự tải video mới", ToolTipIcon.Info, null);
+            _tray.Toast(L.T("Đang theo dõi"), L.F("{0} · DoMa sẽ tự tải video mới", playlist.Title), ToolTipIcon.Info, null);
         return added > 0 || pick.Follow;
     }
 
@@ -376,7 +377,7 @@ internal sealed class MainContext : ApplicationContext
                 var added = AddMedia(fresh.Select(e => (e.Url, (string?)e.Title)), channel.Options, true, null, null);
                 total += added;
                 if (added > 0)
-                    _tray.Toast($"Video mới từ {channel.Title}", added == 1 ? fresh[0].Title : $"{added} video mới · đang tải", ToolTipIcon.Info, ShowNow);
+                    _tray.Toast(L.F("Video mới từ {0}", channel.Title), added == 1 ? fresh[0].Title : L.F("{0} video mới · đang tải", added), ToolTipIcon.Info, ShowNow);
             }
         }
         catch (Exception e)
@@ -442,7 +443,7 @@ internal sealed class MainContext : ApplicationContext
         if (!await MediaToolsReadyAsync(CancellationToken.None))
             return;
         if (links.Count > 1)
-            _tray.Toast("Đang lấy thông tin video", $"{links.Count} video · DoMa sẽ thêm vào danh sách khi xong", ToolTipIcon.None, null, 5);
+            _tray.Toast(L.T("Đang lấy thông tin video"), L.F("{0} video · DoMa sẽ thêm vào danh sách khi xong", links.Count), ToolTipIcon.None, null, 5);
         var added = 0;
         foreach (var link in links)
         {
@@ -455,7 +456,7 @@ internal sealed class MainContext : ApplicationContext
         PostToForm(() =>
         {
             if (added > 0 && links.Count > 1)
-                _tray.Toast("Đã thêm video", $"{added} video vào danh sách", ToolTipIcon.Info, ShowNow);
+                _tray.Toast(L.T("Đã thêm video"), L.F("{0} video vào danh sách", added), ToolTipIcon.Info, ShowNow);
         });
     }
 
@@ -474,17 +475,17 @@ internal sealed class MainContext : ApplicationContext
     {
         var asked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var missing = _ytTools.Missing;
-        var lines = string.Join("\n", missing.Select(m => $"• {m.Name} (khoảng {m.SizeMb} MB): " + m.Name switch
+        var lines = string.Join("\n", missing.Select(m => L.F("• {0} (khoảng {1} MB): ", m.Name, m.SizeMb) + m.Name switch
         {
-            "yt-dlp" => "đọc trang video YouTube, Facebook, TikTok…",
-            "deno" => "chạy JavaScript, yt-dlp cần để lấy link video YouTube",
-            _ => "ghép hình và tiếng thành một tệp .mp4, đổi sang MP3",
+            "yt-dlp" => L.T("đọc trang video YouTube, Facebook, TikTok…"),
+            "deno" => L.T("chạy JavaScript, yt-dlp cần để lấy link video YouTube"),
+            _ => L.T("ghép hình và tiếng thành một tệp .mp4, đổi sang MP3"),
         }));
         _ui.Post(_ =>
         {
-            var text = "Để tải video từ YouTube, Facebook, TikTok…, DoMa cần thêm công cụ miễn phí, mã nguồn mở:\n\n"
-                + lines + "\n\nDoMa sẽ tải chúng từ GitHub một lần duy nhất. Tải ngay?";
-            const string caption = "Tải video từ trang web";
+            var text = L.T("Để tải video từ YouTube, Facebook, TikTok…, DoMa cần thêm công cụ miễn phí, mã nguồn mở:\n\n")
+                + lines + L.T("\n\nDoMa sẽ tải chúng từ GitHub một lần duy nhất. Tải ngay?");
+            var caption = L.T("Tải video từ trang web");
             // Cửa sổ DoMa đang ẩn dưới khay: hiện hộp hỏi nổi lên trên trình duyệt.
             var answer = _form.Visible
                 ? MessageBox.Show(_form, text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question)
@@ -494,20 +495,20 @@ internal sealed class MainContext : ApplicationContext
         }, null);
         if (!await asked.Task)
             return false;
-        _tray.Toast("Đang chuẩn bị tải video", $"Đang tải {string.Join(", ", missing.Select(m => m.Name))} (một lần duy nhất, có thể mất vài phút)…", ToolTipIcon.None, null, 10);
+        _tray.Toast(L.T("Đang chuẩn bị tải video"), L.F("Đang tải {0} (một lần duy nhất, có thể mất vài phút)…", string.Join(", ", missing.Select(m => m.Name))), ToolTipIcon.None, null, 10);
         try
         {
             _ytInstallPercent = 0;
             await _ytTools.InstallAsync(new Progress<int>(p => _ytInstallPercent = p), CancellationToken.None);
             _ytInstallPercent = -1;
-            _tray.Toast("Đã sẵn sàng tải video", "Đang lấy thông tin video…", ToolTipIcon.Info, null);
+            _tray.Toast(L.T("Đã sẵn sàng tải video"), L.T("Đang lấy thông tin video…"), ToolTipIcon.Info, null);
             return true;
         }
         catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or TaskCanceledException)
         {
             _log.Write("youtube-tools", e, null);
             _ytInstallPercent = -1;
-            _tray.Toast("Không tải được công cụ tải video", $"Kiểm tra kết nối mạng rồi thử lại. ({e.Message})", ToolTipIcon.Error, null, 10);
+            _tray.Toast(L.T("Không tải được công cụ tải video"), L.F("Kiểm tra kết nối mạng rồi thử lại. ({0})", e.Message), ToolTipIcon.Error, null, 10);
             return false;
         }
     }
@@ -520,7 +521,7 @@ internal sealed class MainContext : ApplicationContext
         if (!_manager.ReplaceLink(item.Id, req with { Media = item.Request.Media }))
             return false;
         _refresh.Disarm(item.Id);
-        _tray.Toast("Đã làm mới link", $"{Path.GetFileName(item.TargetPath)} · đang tải tiếp phần còn lại", ToolTipIcon.Info, ShowNow);
+        _tray.Toast(L.T("Đã làm mới link"), L.F("{0} · đang tải tiếp phần còn lại", Path.GetFileName(item.TargetPath)), ToolTipIcon.Info, ShowNow);
         return true;
     }
 
@@ -593,7 +594,7 @@ internal sealed class MainContext : ApplicationContext
         var links = BatchLinks.Prepare(raw, resolver);
         if (links.Count == 0)
         {
-            _tray.Toast("Không có link nào để tải", source.Length > 0 ? $"Trang {source} không có link tải được." : "Không tìm thấy link http/https.", ToolTipIcon.Warning, null);
+            _tray.Toast(L.T("Không có link nào để tải"), source.Length > 0 ? L.F("Trang {0} không có link tải được.", source) : L.T("Không tìm thấy link http/https."), ToolTipIcon.Warning, null);
             return false;
         }
         using var dialog = new UI.BatchForm(links, source, links.Any(l => l.IsMediaPage) ? LastMedia : null);
@@ -653,7 +654,7 @@ internal sealed class MainContext : ApplicationContext
         await CaptureAsync(msg, reply =>
         {
             if (Messages.TypeOf(reply) == MessageTypes.GiveBack)
-                PostToForm(() => MessageBox.Show(_form, "Không tải được link này.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning));
+                PostToForm(() => MessageBox.Show(_form, L.T("Không tải được link này."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning));
             return Task.FromResult(true);
         }, () => true);
     }
@@ -672,12 +673,13 @@ internal sealed class MainContext : ApplicationContext
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             _log.Write("settings", e, null);
-            MessageBox.Show(_form, "Không lưu được cài đặt.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(_form, L.T("Không lưu được cài đặt."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-        var appearanceChanged = !string.Equals(updated.Appearance, _settings.Appearance, StringComparison.OrdinalIgnoreCase);
+        var appearanceChanged = !string.Equals(updated.Appearance, _settings.Appearance, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(updated.Language, _settings.Language, StringComparison.OrdinalIgnoreCase);
         ApplySettings(updated);
         if (appearanceChanged)
-            MessageBox.Show(_form, "Chế độ màu mới sẽ được áp dụng khi bạn mở lại DoMa (Thoát ở khay hệ thống rồi mở lại).", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(_form, L.T("Chế độ màu hoặc ngôn ngữ mới sẽ được áp dụng khi bạn mở lại DoMa (Thoát ở khay hệ thống rồi mở lại)."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void ApplySettings(Settings updated)
@@ -719,10 +721,10 @@ internal sealed class MainContext : ApplicationContext
         {
             // Chỉ báo lần đầu; các lần tự thử lại sau đó không báo nữa cho đỡ phiền.
             if (item.AutoRetries == 0)
-                _tray.Toast("Mất kết nối", $"{Path.GetFileName(item.TargetPath)} · DoMa sẽ tự tải tiếp khi có mạng lại", ToolTipIcon.Warning, ShowNow);
+                _tray.Toast(L.T("Mất kết nối"), L.F("{0} · DoMa sẽ tự tải tiếp khi có mạng lại", Path.GetFileName(item.TargetPath)), ToolTipIcon.Warning, ShowNow);
             return;
         }
-        _tray.Toast("Tải lỗi", Path.GetFileName(item.TargetPath), ToolTipIcon.Error, ShowNow);
+        _tray.Toast(L.T("Tải lỗi"), Path.GetFileName(item.TargetPath), ToolTipIcon.Error, ShowNow);
     }
 
     private void PauseAll() =>
@@ -740,7 +742,7 @@ internal sealed class MainContext : ApplicationContext
         var speed = active.Sum(i => _manager.SpeedBytesPerSec(i.Id));
         var status = TrayController.Summary(active.Count, downloaded, total, speed);
         if (_ytInstallPercent >= 0)
-            status = $"Đang tải công cụ YouTube {_ytInstallPercent}%" + (status is null ? "" : " · " + status);
+            status = L.F("Đang tải công cụ YouTube {0}%", _ytInstallPercent) + (status is null ? "" : " · " + status);
         _tray.SetStatus(status);
     }
 
@@ -771,7 +773,7 @@ internal sealed class MainContext : ApplicationContext
         var id = item.Id;
         _ = Task.Run(() => PostProcessAsync(id, path, url, settings));
         if (_settings.NotifyOnComplete)
-            _tray.Toast("Đã tải xong", Path.GetFileName(item.TargetPath), ToolTipIcon.Info, () => UI.MainForm.OpenFolder(path));
+            _tray.Toast(L.T("Đã tải xong"), Path.GetFileName(item.TargetPath), ToolTipIcon.Info, () => UI.MainForm.OpenFolder(path));
     }
 
     private static string ResumeFile => Path.Combine(AppPaths.DataDir, "resume-after-update.json");
@@ -817,7 +819,7 @@ internal sealed class MainContext : ApplicationContext
     /// </summary>
     private void HandleThreat(Guid id, string path)
     {
-        const string threat = "Windows Defender phát hiện";
+        var threat = L.T("Windows Defender phát hiện");
         try
         {
             _manager.MarkThreat(id, threat);
@@ -827,17 +829,17 @@ internal sealed class MainContext : ApplicationContext
             _log.Write("threat", e, null);
         }
         var name = Path.GetFileName(path);
-        _tray.Notify($"Phát hiện mã độc trong {name}. Đừng mở tệp này.", ShowNow);
+        _tray.Notify(L.F("Phát hiện mã độc trong {0}. Đừng mở tệp này.", name), ShowNow);
         if (!File.Exists(path))
         {
             MessageBox.Show(_form.Visible ? _form : null,
-                $"Windows Defender phát hiện mã độc trong “{name}” và đã cách ly tệp này. Máy của bạn an toàn.\n\nTệp vẫn được đánh dấu đỏ trong danh sách để bạn biết nguồn tải không đáng tin.",
-                "Cảnh báo bảo mật", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                L.F("Windows Defender phát hiện mã độc trong “{0}” và đã cách ly tệp này. Máy của bạn an toàn.\n\nTệp vẫn được đánh dấu đỏ trong danh sách để bạn biết nguồn tải không đáng tin.", name),
+                L.T("Cảnh báo bảo mật"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         var answer = MessageBox.Show(_form.Visible ? _form : null,
-            $"Windows Defender phát hiện mã độc trong “{name}”.\n\nBạn có muốn xoá tệp này ngay không? (Khuyến nghị: Có)\nNếu giữ lại, tệp được đánh dấu đỏ và DoMa sẽ hỏi lại mỗi khi bạn mở.",
-            "Cảnh báo bảo mật", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1);
+            L.F("Windows Defender phát hiện mã độc trong “{0}”.\n\nBạn có muốn xoá tệp này ngay không? (Khuyến nghị: Có)\nNếu giữ lại, tệp được đánh dấu đỏ và DoMa sẽ hỏi lại mỗi khi bạn mở.", name),
+            L.T("Cảnh báo bảo mật"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1);
         if (answer != System.Windows.Forms.DialogResult.Yes)
             return;
         try
@@ -847,7 +849,7 @@ internal sealed class MainContext : ApplicationContext
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             _log.Write("threat", e, null);
-            MessageBox.Show(_form.Visible ? _form : null, "Không xoá được tệp. Có thể Windows Defender đang xử lý nó.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(_form.Visible ? _form : null, L.T("Không xoá được tệp. Có thể Windows Defender đang xử lý nó."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -865,7 +867,7 @@ internal sealed class MainContext : ApplicationContext
             File.Delete(path);
             _manager.Relocate(id, output);
             if (notify)
-                PostToForm(() => _tray.Notify($"Đã chuyển sang MP4: {Path.GetFileName(output)}", output, ToolTipIcon.Info));
+                PostToForm(() => _tray.Notify(L.F("Đã chuyển sang MP4: {0}", Path.GetFileName(output)), output, ToolTipIcon.Info));
             return output;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException)
@@ -873,7 +875,7 @@ internal sealed class MainContext : ApplicationContext
             _log.Write("mp4", e, null);
             if (quiet)
                 return null;
-            var reason = e is NotSupportedException ? e.Message : "Không chuyển được sang MP4, tệp .ts vẫn được giữ nguyên.";
+            var reason = e is NotSupportedException ? e.Message : L.T("Không chuyển được sang MP4, tệp .ts vẫn được giữ nguyên.");
             PostToForm(() => _tray.Notify(reason, path, ToolTipIcon.Warning));
             return null;
         }
@@ -895,7 +897,7 @@ internal sealed class MainContext : ApplicationContext
             return;
         var output = FileNameResolver.MakeUnique(Path.ChangeExtension(path, extension), p => File.Exists(p) || Directory.Exists(p));
         var name = Path.GetFileName(path);
-        PostToForm(() => _tray.Toast(toMp3 ? "Đang tách nhạc MP3" : "Đang chuyển sang MP4", name, ToolTipIcon.None, null, 5));
+        PostToForm(() => _tray.Toast(toMp3 ? L.T("Đang tách nhạc MP3") : L.T("Đang chuyển sang MP4"), name, ToolTipIcon.None, null, 5));
         try
         {
             if (toMp3)
@@ -914,12 +916,12 @@ internal sealed class MainContext : ApplicationContext
                 File.Delete(path);
                 _manager.Relocate(id, output);
             }
-            PostToForm(() => _tray.Notify($"{(toMp3 ? "Đã tách nhạc" : "Đã chuyển sang MP4")}: {Path.GetFileName(output)}", output, ToolTipIcon.Info));
+            PostToForm(() => _tray.Notify(toMp3 ? L.F("Đã tách nhạc: {0}", Path.GetFileName(output)) : L.F("Đã chuyển sang MP4: {0}", Path.GetFileName(output)), output, ToolTipIcon.Info));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             _log.Write("convert", e, null);
-            PostToForm(() => _tray.Notify($"Không đổi được định dạng {name}. {e.Message}", path, ToolTipIcon.Warning));
+            PostToForm(() => _tray.Notify(L.F("Không đổi được định dạng {0}. {1}", name, e.Message), path, ToolTipIcon.Warning));
         }
     }
 
@@ -944,13 +946,13 @@ internal sealed class MainContext : ApplicationContext
             if (settings.AutoExtractZip && ArchiveExtractor.CanExtract(path))
             {
                 var folder = ArchiveExtractor.Extract(path);
-                PostToForm(() => _tray.Notify($"Đã giải nén {Path.GetFileName(path)}", folder, ToolTipIcon.Info));
+                PostToForm(() => _tray.Notify(L.F("Đã giải nén {0}", Path.GetFileName(path)), folder, ToolTipIcon.Info));
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
         {
             _log.Write("postprocess", e, null);
-            PostToForm(() => _tray.Notify($"Không xử lý được {Path.GetFileName(path)} sau khi tải: {e.Message}", path, ToolTipIcon.Warning));
+            PostToForm(() => _tray.Notify(L.F("Không xử lý được {0} sau khi tải: {1}", Path.GetFileName(path), e.Message), path, ToolTipIcon.Warning));
         }
     }
 

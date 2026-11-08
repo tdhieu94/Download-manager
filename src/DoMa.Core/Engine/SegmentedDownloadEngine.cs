@@ -131,7 +131,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
                 return (EngineOutcome.Paused, null);
             if (fault is not null)
                 return (EngineOutcome.Failed, Describe(fault, run.PartPath));
-            return (EngineOutcome.Failed, "Dung lượng tải về không khớp");
+            return (EngineOutcome.Failed, L.T("Dung lượng tải về không khớp"));
         }
         finally
         {
@@ -365,17 +365,17 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
     private static string Describe(Exception fault, string partPath) => fault switch
     {
         WriteFailedException w => WriteError(w.InnerException!, partPath),
-        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone } => "Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp",
-        HttpRequestException { StatusCode: { } code } => $"Máy chủ trả lỗi {(int)code}",
+        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone } => L.T("Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp"),
+        HttpRequestException { StatusCode: { } code } => L.F("Máy chủ trả lỗi {0}", (int)code),
         _ => NetworkMessage,
     };
 
-    private const string NetworkMessage = "Lỗi mạng, đã thử lại nhiều lần nhưng không tải được";
+    private static string NetworkMessage => L.T("Lỗi mạng, đã thử lại nhiều lần nhưng không tải được");
 
     private static string WriteError(Exception ex, string path) =>
         (ex.HResult & 0xFFFF) is 112 or 39
-            ? "Ổ đĩa đầy, không đủ chỗ để lưu tệp"
-            : $"Không ghi được tệp: {path}";
+            ? L.T("Ổ đĩa đầy, không đủ chỗ để lưu tệp")
+            : L.F("Không ghi được tệp: {0}", path);
 
     private sealed class WriteFailedException(Exception inner) : IOException(inner.Message, inner);
 

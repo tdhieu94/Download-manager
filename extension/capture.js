@@ -217,6 +217,11 @@ export function mediaFileName(title, url, media) {
   return `${base}.${media.kind === "hls" ? "ts" : media.ext}`;
 }
 
+/** Chữ hiển thị: tiếng Việt nếu trình duyệt dùng tiếng Việt, ngoài ra tiếng Anh. */
+export function t(vi, en, language = globalThis.navigator?.language) {
+  return String(language ?? "vi").toLowerCase().startsWith("vi") ? vi : en;
+}
+
 // ── YouTube: DoMa tải qua công cụ yt-dlp, tiện ích chỉ cần gửi link trang video ──
 const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 

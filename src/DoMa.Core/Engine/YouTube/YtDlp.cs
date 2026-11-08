@@ -213,28 +213,28 @@ public static class YtDlp
         var error = stderr.LastOrDefault(l => l.StartsWith("ERROR:", StringComparison.Ordinal))?[6..].Trim() ?? "";
         bool Has(string s) => error.Contains(s, StringComparison.OrdinalIgnoreCase);
         if (Has("Sign in to confirm") || Has("not a bot"))
-            return ("YouTube yêu cầu xác minh. Hãy mở YouTube trên trình duyệt (đăng nhập nếu được) rồi tải lại bằng DoMa.", false);
+            return (L.T("YouTube yêu cầu xác minh. Hãy mở YouTube trên trình duyệt (đăng nhập nếu được) rồi tải lại bằng DoMa."), false);
         if (Has("age") && Has("confirm"))
-            return ("Video giới hạn độ tuổi. Hãy đăng nhập YouTube trên trình duyệt rồi tải lại bằng DoMa.", false);
+            return (L.T("Video giới hạn độ tuổi. Hãy đăng nhập YouTube trên trình duyệt rồi tải lại bằng DoMa."), false);
         if (Has("Private video"))
-            return ("Video riêng tư, không tải được.", false);
+            return (L.T("Video riêng tư, không tải được."), false);
         if (Has("members-only") || Has("Join this channel"))
-            return ("Video chỉ dành cho hội viên kênh, không tải được.", false);
+            return (L.T("Video chỉ dành cho hội viên kênh, không tải được."), false);
         if (Has("live event") || Has("is live") || Has("Premieres"))
-            return ("Video đang phát trực tiếp hoặc chưa công chiếu, hãy tải sau khi phát xong.", false);
+            return (L.T("Video đang phát trực tiếp hoặc chưa công chiếu, hãy tải sau khi phát xong."), false);
         if (Has("Requested format is not available") || Has("Only images are available") || Has("JavaScript runtime") || Has("n challenge"))
-            return (WithRaw("YouTube không cho lấy video lúc này. DoMa sẽ cập nhật công cụ, hãy thử lại sau ít phút.", error), false);
+            return (WithRaw(L.T("YouTube không cho lấy video lúc này. DoMa sẽ cập nhật công cụ, hãy thử lại sau ít phút."), error), false);
         if (Has("Video unavailable") || Has("video is not available") || Has("content isn't available") || Has("not available in your country"))
-            return (WithRaw("Video không còn hoặc bị chặn ở khu vực của bạn.", error), false);
+            return (WithRaw(L.T("Video không còn hoặc bị chặn ở khu vực của bạn."), error), false);
         if (Has("subtitle"))
-            return (WithRaw("Không tải được phụ đề. Hãy bỏ chọn “Tải kèm phụ đề” rồi tải lại.", error), false);
+            return (WithRaw(L.T("Không tải được phụ đề. Hãy bỏ chọn “Tải kèm phụ đề” rồi tải lại."), error), false);
         if (Has("login required") || Has("log in") || Has("cookies") && Has("authentication"))
-            return ("Trang yêu cầu đăng nhập để xem video này. Hãy đăng nhập trên trình duyệt rồi tải lại bằng DoMa.", false);
+            return (L.T("Trang yêu cầu đăng nhập để xem video này. Hãy đăng nhập trên trình duyệt rồi tải lại bằng DoMa."), false);
         if (Has("timed out") || Has("Unable to download") || Has("getaddrinfo") || Has("Connection") || Has("Network"))
-            return ("Mất kết nối khi tải video YouTube.", true);
+            return (L.T("Mất kết nối khi tải video YouTube."), true);
         if (Has("DRM"))
-            return ("Video có bảo vệ bản quyền (DRM), không tải được.", false);
-        return (error.Length > 0 ? "yt-dlp: " + error : "Không tải được video.", false);
+            return (L.T("Video có bảo vệ bản quyền (DRM), không tải được."), false);
+        return (error.Length > 0 ? "yt-dlp: " + error : L.T("Không tải được video."), false);
     }
 
     /// <summary>Kèm nguyên văn lỗi của yt-dlp (rút gọn) để dễ tìm nguyên nhân.</summary>

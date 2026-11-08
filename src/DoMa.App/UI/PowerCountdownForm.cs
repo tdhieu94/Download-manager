@@ -13,16 +13,16 @@ public sealed class PowerCountdownForm : Form
 
     internal PowerCountdownForm(AfterDone action)
     {
-        var verb = action == AfterDone.Sleep ? "cho máy ngủ" : "tắt máy";
-        Text = "Đã tải xong";
+        var verb = action == AfterDone.Sleep ? L.T("cho máy ngủ") : L.T("tắt máy");
+        Text = L.T("Đã tải xong");
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
         DialogParts.ApplyBase(this, new Size(460, 220));
         ShowInTaskbar = true;
         int S(int v) => Theme.Scale(this, v);
 
-        var go = new ModernButton(action == AfterDone.Sleep ? "Ngủ ngay" : "Tắt máy ngay", IconKind.Power, ButtonKind.Primary) { DialogResult = DialogResult.OK };
-        var cancel = new ModernButton("Huỷ") { DialogResult = DialogResult.Cancel };
+        var go = new ModernButton(action == AfterDone.Sleep ? L.T("Ngủ ngay") : L.T("Tắt máy ngay"), IconKind.Power, ButtonKind.Primary) { DialogResult = DialogResult.OK };
+        var cancel = new ModernButton(L.T("Huỷ")) { DialogResult = DialogResult.Cancel };
         AcceptButton = go;
         CancelButton = cancel;
 
@@ -31,7 +31,7 @@ public sealed class PowerCountdownForm : Form
         body.Controls.Add(_label);
         Controls.Add(body);
         Controls.Add(DialogParts.Footer(this, go, cancel));
-        Controls.Add(DialogParts.Header(this, IconKind.Power, Theme.Warning, "Mọi tệp đã tải xong", $"DoMa sẽ {verb} khi hết thời gian đếm ngược."));
+        Controls.Add(DialogParts.Header(this, IconKind.Power, Theme.Warning, L.T("Mọi tệp đã tải xong"), L.F("DoMa sẽ {0} khi hết thời gian đếm ngược.", verb)));
 
         Render(verb);
         _timer.Tick += (_, _) =>
@@ -48,5 +48,5 @@ public sealed class PowerCountdownForm : Form
         FormClosed += (_, _) => _timer.Dispose();
     }
 
-    private void Render(string verb) => _label.Text = $"Sẽ {verb} sau {_left} giây. Bấm “Huỷ” nếu bạn vẫn đang dùng máy.";
+    private void Render(string verb) => _label.Text = L.F("Sẽ {0} sau {1} giây. Bấm “Huỷ” nếu bạn vẫn đang dùng máy.", verb, _left);
 }

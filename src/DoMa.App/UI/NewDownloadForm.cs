@@ -11,10 +11,10 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
 {
     private readonly InputBox _link = new(IconKind.Link) { ReadOnly = true };
     private readonly InputBox _path = new(IconKind.Folder);
-    private readonly ModernButton _browse = new("Chọn…");
-    private readonly ModernButton _now = new("Tải ngay", IconKind.Download, ButtonKind.Primary);
-    private readonly ModernButton _later = new("Tải sau", IconKind.Clock);
-    private readonly ModernButton _cancel = new("Huỷ", IconKind.None, ButtonKind.Ghost);
+    private readonly ModernButton _browse = new(L.T("Chọn…"));
+    private readonly ModernButton _now = new(L.T("Tải ngay"), IconKind.Download, ButtonKind.Primary);
+    private readonly ModernButton _later = new(L.T("Tải sau"), IconKind.Clock);
+    private readonly ModernButton _cancel = new(L.T("Huỷ"), IconKind.None, ButtonKind.Ghost);
     private readonly TaskCompletionSource<DialogResult> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private DialogChoice _choice = DialogChoice.Cancel;
     private string _fileName = "";
@@ -32,7 +32,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     {
         _warn = warnAboutRisk;
         _lastMedia = lastMedia ?? MediaOptions.Default;
-        Text = "Tải xuống mới";
+        Text = L.T("Tải xuống mới");
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
         DialogParts.ApplyBase(this, new Size(600, 360));
@@ -42,9 +42,9 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         CancelButton = _cancel;
 
         var body = _body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
-        var linkLabel = DialogParts.FieldLabel("Đường dẫn");
-        var pathLabel = DialogParts.FieldLabel("Lưu thành");
-        var note = DialogParts.Hint("Thư mục tự đổi theo loại file: Tài liệu / Phần mềm / Nén / Khác");
+        var linkLabel = DialogParts.FieldLabel(L.T("Đường dẫn"));
+        var pathLabel = DialogParts.FieldLabel(L.T("Lưu thành"));
+        var note = DialogParts.Hint(L.T("Thư mục tự đổi theo loại file: Tài liệu / Phần mềm / Nén / Khác"));
 
         var inner = ClientSize.Width - S(48);
         linkLabel.Location = new Point(S(24), S(8));
@@ -98,7 +98,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
 
             var x = S(88);
             var w = header.Width - x - S(24);
-            TextRenderer.DrawText(g, _fileName.Length > 0 ? _fileName : "Tệp mới", Theme.Subtitle, new Rectangle(x, S(22), w, S(26)), Theme.Text,
+            TextRenderer.DrawText(g, _fileName.Length > 0 ? _fileName : L.T("Tệp mới"), Theme.Subtitle, new Rectangle(x, S(22), w, S(26)), Theme.Text,
                 TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
 
             // Hai "chip" thông tin: loại file và dung lượng.
@@ -171,7 +171,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
             var length = (options.ClipEnd ?? duration) - (options.ClipStart ?? 0);
             _size = Math.Max(0, full * length / duration);
         }
-        _sizeText = _size is null && !options.AudioOnly && options.MaxHeight is not null ? "Dung lượng tuỳ chất lượng" : SizeFormatter.Format(_size);
+        _sizeText = _size is null && !options.AudioOnly && options.MaxHeight is not null ? L.T("Dung lượng tuỳ chất lượng") : SizeFormatter.Format(_size);
         Invalidate(true);
     }
 
@@ -180,13 +180,13 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     {
         var high = _risk.Level == RiskLevel.High;
         var color = high ? Theme.Danger : Theme.Warning;
-        var title = high ? "Tệp này có dấu hiệu nguy hiểm" : "Hãy cẩn thận với tệp này";
+        var title = high ? L.T("Tệp này có dấu hiệu nguy hiểm") : L.T("Hãy cẩn thận với tệp này");
         AddBanner(title, string.Join("\n", _risk.Reasons.Select(r => "• " + r)), color, IconKind.Shield, null);
 
         if (high)
         {
             // Với tệp nguy hiểm, Enter không được tự tải: phải bấm hẳn vào nút.
-            _now.Text = "Vẫn tải";
+            _now.Text = L.T("Vẫn tải");
             AcceptButton = null;
         }
     }
@@ -200,23 +200,23 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         var when = (existing.CompletedAt ?? existing.AddedAt).ToLocalTime().ToString("HH:mm dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
         var (title, text) = (done, exists) switch
         {
-            (true, true) => ("Bạn đã tải tệp này rồi", $"“{name}” tải xong lúc {when}. Bấm Tải ngay nếu vẫn muốn tải thêm một bản."),
-            (true, false) => ("Bạn đã từng tải tệp này", $"“{name}” tải xong lúc {when}, nhưng tệp đã bị xoá hoặc chuyển đi."),
-            _ => ("Tệp này đang có trong danh sách", $"“{name}” đang ở trạng thái {StatusText(existing.Status)}. Có thể bấm Huỷ và tải tiếp tệp đó trong cửa sổ DoMa."),
+            (true, true) => (L.T("Bạn đã tải tệp này rồi"), L.F("“{0}” tải xong lúc {1}. Bấm Tải ngay nếu vẫn muốn tải thêm một bản.", name, when)),
+            (true, false) => (L.T("Bạn đã từng tải tệp này"), L.F("“{0}” tải xong lúc {1}, nhưng tệp đã bị xoá hoặc chuyển đi.", name, when)),
+            _ => (L.T("Tệp này đang có trong danh sách"), L.F("“{0}” đang ở trạng thái {1}. Có thể bấm Huỷ và tải tiếp tệp đó trong cửa sổ DoMa.", name, StatusText(existing.Status))),
         };
         // Tệp bị đánh dấu mã độc thì không mở thẳng từ đây.
-        (string, Action)? action = exists && existing.Threat is null ? ("Mở tệp", () => MainForm.OpenFile(existing.TargetPath)) : null;
+        (string, Action)? action = exists && existing.Threat is null ? (L.T("Mở tệp"), () => MainForm.OpenFile(existing.TargetPath)) : null;
         AddBanner(title, text, Theme.Accent, IconKind.File, action);
     }
 
     private static string StatusText(DownloadStatus status) => status switch
     {
-        DownloadStatus.Downloading => "đang tải",
-        DownloadStatus.Queued => "chờ tải",
-        DownloadStatus.Paused => "tạm dừng",
-        DownloadStatus.Failed => "lỗi",
-        DownloadStatus.Later => "chờ tải sau",
-        _ => "chưa xong",
+        DownloadStatus.Downloading => L.T("đang tải"),
+        DownloadStatus.Queued => L.T("chờ tải"),
+        DownloadStatus.Paused => L.T("tạm dừng"),
+        DownloadStatus.Failed => L.T("lỗi"),
+        DownloadStatus.Later => L.T("chờ tải sau"),
+        _ => L.T("chưa xong"),
     };
 
     private int _bannerTop;
@@ -286,15 +286,15 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         }
         if (choice != DialogChoice.Cancel && !IsValidPath(_path.Text.Trim()))
         {
-            MessageBox.Show(this, "Đường dẫn lưu không hợp lệ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, L.T("Đường dẫn lưu không hợp lệ."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _path.Box.Focus();
             return;
         }
         if (choice == DialogChoice.DownloadNow && Core.Files.DiskSpace.Shortage(_path.Text.Trim(), _size) is { } shortage)
         {
             var answer = MessageBox.Show(this,
-                shortage + ".\n\nHãy bấm “Chọn…” để lưu sang ổ khác, hoặc dọn bớt ổ rồi tải. Vẫn thêm vào danh sách “Chờ tải sau”?",
-                "Không đủ chỗ trống", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                shortage + L.T(".\n\nHãy bấm “Chọn…” để lưu sang ổ khác, hoặc dọn bớt ổ rồi tải. Vẫn thêm vào danh sách “Chờ tải sau”?"),
+                L.T("Không đủ chỗ trống"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
             if (answer != System.Windows.Forms.DialogResult.Yes)
                 return;
             choice = DialogChoice.Later;
@@ -302,9 +302,9 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         if (choice != DialogChoice.Cancel && _risk.Level == RiskLevel.High)
         {
             var answer = MessageBox.Show(this,
-                "DoMa phát hiện tệp này có dấu hiệu nguy hiểm:\n\n" + string.Join("\n", _risk.Reasons.Select(r => "• " + r))
-                + "\n\nBạn vẫn muốn tải? Sau khi tải nên quét bằng Windows Defender trước khi mở.",
-                "Cảnh báo bảo mật", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                L.T("DoMa phát hiện tệp này có dấu hiệu nguy hiểm:\n\n") + string.Join("\n", _risk.Reasons.Select(r => "• " + r))
+                + L.T("\n\nBạn vẫn muốn tải? Sau khi tải nên quét bằng Windows Defender trước khi mở."),
+                L.T("Cảnh báo bảo mật"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
             if (answer != System.Windows.Forms.DialogResult.Yes)
                 return;
         }

@@ -10,7 +10,7 @@ namespace DoMa.Core.Engine.YouTube;
 /// </summary>
 public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
 {
-    private const string NotReady = "Chưa có công cụ tải YouTube. Hãy tải lại video từ trình duyệt để DoMa cài công cụ.";
+    private static string NotReady => L.T("Chưa có công cụ tải YouTube. Hãy tải lại video từ trình duyệt để DoMa cài công cụ.");
 
     public async Task<EngineResult> RunAsync(DownloadJob job, IProgress<EngineProgress> progress, CancellationToken pauseToken)
     {
@@ -28,7 +28,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
         {
-            return new EngineResult(EngineOutcome.Failed, null, "Không chạy được công cụ tải YouTube: " + e.Message);
+            return new EngineResult(EngineOutcome.Failed, null, L.T("Không chạy được công cụ tải YouTube: ") + e.Message);
         }
         finally
         {
@@ -54,11 +54,11 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         try
         {
             var info = YtDlp.ParseInfo(output);
-            return info.IsLive ? (null, "Video đang phát trực tiếp, hãy tải sau khi phát xong.") : (info, null);
+            return info.IsLive ? (null, L.T("Video đang phát trực tiếp, hãy tải sau khi phát xong.")) : (info, null);
         }
         catch (System.Text.Json.JsonException)
         {
-            return (null, "Không đọc được thông tin video.");
+            return (null, L.T("Không đọc được thông tin video."));
         }
     }
 
@@ -71,11 +71,11 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         try
         {
             var info = YtDlp.ParsePlaylist(output);
-            return info.Entries.Count == 0 ? (null, "Playlist không có video nào tải được.") : (info, null);
+            return info.Entries.Count == 0 ? (null, L.T("Playlist không có video nào tải được.")) : (info, null);
         }
         catch (System.Text.Json.JsonException)
         {
-            return (null, "Không đọc được danh sách video.");
+            return (null, L.T("Không đọc được danh sách video."));
         }
     }
 
@@ -101,7 +101,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
         {
-            return (null, "Không chạy được công cụ tải YouTube: " + e.Message);
+            return (null, L.T("Không chạy được công cụ tải YouTube: ") + e.Message);
         }
         finally
         {
@@ -214,7 +214,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             info.ArgumentList.Add(a);
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         info.Environment["PYTHONUTF8"] = "1";
-        return Process.Start(info) ?? throw new IOException("yt-dlp không khởi động được.");
+        return Process.Start(info) ?? throw new IOException(L.T("yt-dlp không khởi động được."));
     }
 
     private static void Kill(Process process)

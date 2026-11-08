@@ -15,13 +15,13 @@ public sealed class TrayController : IDisposable
     {
         _openFolder = openFolder;
         var menu = ThemedRenderer.CreateMenu();
-        var openItem = ThemedRenderer.Item(menu, "Mở DoMa", IconKind.Download, (_, _) => open());
+        var openItem = ThemedRenderer.Item(menu, L.T("Mở DoMa"), IconKind.Download, (_, _) => open());
         openItem.Font = Theme.BodySemibold;
         if (pauseAll is not null && resumeAll is not null)
         {
             menu.Items.Add(new ToolStripSeparator());
-            var pause = ThemedRenderer.Item(menu, "Tạm dừng tất cả", IconKind.Pause, (_, _) => pauseAll());
-            var resume = ThemedRenderer.Item(menu, "Tiếp tục tất cả", IconKind.Play, (_, _) => resumeAll());
+            var pause = ThemedRenderer.Item(menu, L.T("Tạm dừng tất cả"), IconKind.Pause, (_, _) => pauseAll());
+            var resume = ThemedRenderer.Item(menu, L.T("Tiếp tục tất cả"), IconKind.Play, (_, _) => resumeAll());
             menu.Opening += (_, _) =>
             {
                 var (canPause, canResume) = canToggle?.Invoke() ?? (true, true);
@@ -30,9 +30,9 @@ public sealed class TrayController : IDisposable
             };
             menu.Items.Add(new ToolStripSeparator());
         }
-        ThemedRenderer.Item(menu, "Kiểm tra cập nhật", IconKind.Refresh, (_, _) => checkUpdates());
+        ThemedRenderer.Item(menu, L.T("Kiểm tra cập nhật"), IconKind.Refresh, (_, _) => checkUpdates());
         menu.Items.Add(new ToolStripSeparator());
-        ThemedRenderer.Item(menu, "Thoát", IconKind.Power, (_, _) => exit());
+        ThemedRenderer.Item(menu, L.T("Thoát"), IconKind.Power, (_, _) => exit());
         _icon = new NotifyIcon
         {
             Icon = Theme.AppIconSized(SystemInformation.SmallIconSize.Width),
@@ -82,7 +82,7 @@ public sealed class TrayController : IDisposable
     {
         if (active == 0)
             return null;
-        var parts = new List<string> { active == 1 ? "Đang tải 1 tệp" : $"Đang tải {active} tệp" };
+        var parts = new List<string> { active == 1 ? L.T("Đang tải 1 tệp") : L.F("Đang tải {0} tệp", active) };
         if (total is > 0)
             parts.Add($"{Math.Clamp(downloaded * 100 / total.Value, 0, 100)}%");
         if (DownloadView.FormatSpeed(bytesPerSec) is { Length: > 0 } speed)

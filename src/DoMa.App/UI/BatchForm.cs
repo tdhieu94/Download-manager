@@ -12,18 +12,18 @@ public sealed class BatchForm : Form
 {
     private static readonly (LinkKind Kind, string Text)[] Kinds =
     [
-        (LinkKind.Document, "Tài liệu"),
-        (LinkKind.Software, "Phần mềm"),
-        (LinkKind.Archive, "Nén"),
-        (LinkKind.Media, "Video, nhạc"),
-        (LinkKind.Other, "Trang khác"),
+        (LinkKind.Document, L.T("Tài liệu")),
+        (LinkKind.Software, L.T("Phần mềm")),
+        (LinkKind.Archive, L.T("Nén")),
+        (LinkKind.Media, L.T("Video, nhạc")),
+        (LinkKind.Other, L.T("Trang khác")),
     ];
 
     private readonly List<BatchLink> _links;
     private readonly HashSet<string> _checked;
     private readonly Dictionary<LinkKind, CheckBox> _filters = [];
-    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = "Lọc theo tên tệp hoặc tên miền" };
-    private readonly CheckBox _all = new() { Text = "Chọn tất cả", AutoSize = true };
+    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = L.T("Lọc theo tên tệp hoặc tên miền") };
+    private readonly CheckBox _all = new() { Text = L.T("Chọn tất cả"), AutoSize = true };
     private readonly Label _count = new() { AutoSize = true };
     private readonly ListView _list = new()
     {
@@ -35,9 +35,9 @@ public sealed class BatchForm : Form
         MultiSelect = true,
         ShowItemToolTips = true,
     };
-    private readonly ModernButton _now = new("Tải ngay", IconKind.Download, ButtonKind.Primary);
-    private readonly ModernButton _later = new("Tải sau", IconKind.Clock);
-    private readonly ModernButton _cancel = new("Huỷ", IconKind.None, ButtonKind.Ghost) { DialogResult = DialogResult.Cancel };
+    private readonly ModernButton _now = new(L.T("Tải ngay"), IconKind.Download, ButtonKind.Primary);
+    private readonly ModernButton _later = new(L.T("Tải sau"), IconKind.Clock);
+    private readonly ModernButton _cancel = new(L.T("Huỷ"), IconKind.None, ButtonKind.Ghost) { DialogResult = DialogResult.Cancel };
     private List<BatchLink> _visible = [];
     private bool _updating;
 
@@ -51,7 +51,7 @@ public sealed class BatchForm : Form
     {
         _links = [.. links];
         _checked = checkAll ? _links.Where(l => l.IsFile).Select(l => l.Url).ToHashSet() : [];
-        Text = "Tải nhiều link";
+        Text = L.T("Tải nhiều link");
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
         DialogParts.ApplyBase(this, new Size(720, 560));
@@ -99,9 +99,9 @@ public sealed class BatchForm : Form
         _list.BackColor = Theme.Surface;
         _list.ForeColor = Theme.Text;
         _list.Font = Theme.Body;
-        _list.Columns.Add("Tên tệp", 300);
-        _list.Columns.Add("Loại", 110);
-        _list.Columns.Add("Nguồn", 180);
+        _list.Columns.Add(L.T("Tên tệp"), 300);
+        _list.Columns.Add(L.T("Loại"), 110);
+        _list.Columns.Add(L.T("Nguồn"), 180);
         _list.ItemChecked += (_, e) =>
         {
             if (_updating || e.Item.Tag is not BatchLink link)
@@ -134,8 +134,8 @@ public sealed class BatchForm : Form
             Controls.Add(strip);
         }
         Controls.Add(DialogParts.Footer(this, _now, _later, _cancel));
-        Controls.Add(DialogParts.Header(this, IconKind.Link, Theme.Accent, title ?? "Tải nhiều link",
-            hint ?? $"{_links.Count} link{(source.Length > 0 ? " từ " + source : "")}. Tích chọn các tệp muốn tải."));
+        Controls.Add(DialogParts.Header(this, IconKind.Link, Theme.Accent, title ?? L.T("Tải nhiều link"),
+            hint ?? L.F("{0} link{1}. Tích chọn các tệp muốn tải.", _links.Count, (source.Length > 0 ? L.T(" từ ") + source : ""))));
 
         _now.Click += (_, _) => Finish(true);
         _later.Click += (_, _) => Finish(false);
@@ -201,7 +201,7 @@ public sealed class BatchForm : Form
     private void UpdateCount()
     {
         var chosen = ChosenVisible().Count;
-        _count.Text = $"Đã chọn {chosen}/{_visible.Count}";
+        _count.Text = L.F("Đã chọn {0}/{1}", chosen, _visible.Count);
         _count.Location = new Point(_count.Parent is { } p ? p.Width - _count.Width - S(24) : _count.Left, S(50));
         _updating = true;
         _all.Checked = _visible.Count > 0 && chosen == _visible.Count;

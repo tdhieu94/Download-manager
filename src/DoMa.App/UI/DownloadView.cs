@@ -30,13 +30,13 @@ public static class DownloadView
             return "";
         var seconds = Math.Max(1, (long)Math.Round(eta.Value.TotalSeconds));
         if (seconds < 60)
-            return $"{seconds} giây";
+            return L.F("{0} giây", seconds);
         var minutes = (seconds + 30) / 60;
         if (minutes < 60)
-            return $"{minutes} phút";
+            return L.F("{0} phút", minutes);
         var hours = minutes / 60;
         var rest = minutes % 60;
-        return rest == 0 ? $"{hours} giờ" : $"{hours} giờ {rest} phút";
+        return rest == 0 ? L.F("{0} giờ", hours) : L.F("{0} giờ {1} phút", hours, rest);
     }
 
     public static int Percent(long downloaded, long? total)
@@ -83,39 +83,39 @@ public static class DownloadView
     public static string TimeTooltip(DownloadItem item)
     {
         static string F(DateTimeOffset t) => t.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
-        var text = $"Thêm lúc {F(item.AddedAt)}";
+        var text = L.F("Thêm lúc {0}", F(item.AddedAt));
         if (item.CompletedAt is { } done)
         {
-            text += $"\nXong lúc {F(done)}";
+            text += L.F("\nXong lúc {0}", F(done));
             var took = done - item.AddedAt;
             if (took > TimeSpan.Zero)
-                text += $"\nMất {FormatDuration(took)}";
+                text += L.F("\nMất {0}", FormatDuration(took));
         }
         return text;
     }
 
     private static string FormatDuration(TimeSpan t) =>
-        t.TotalHours >= 1 ? $"{(int)t.TotalHours} giờ {t.Minutes} phút"
-        : t.TotalMinutes >= 1 ? $"{t.Minutes} phút {t.Seconds} giây"
-        : $"{Math.Max(1, t.Seconds)} giây";
+        t.TotalHours >= 1 ? L.F("{0} giờ {1} phút", (int)t.TotalHours, t.Minutes)
+        : t.TotalMinutes >= 1 ? L.F("{0} phút {1} giây", t.Minutes, t.Seconds)
+        : L.F("{0} giây", Math.Max(1, t.Seconds));
 
     public static string StatusText(DownloadItem item)
     {
         if (item.Threat is not null)
-            return "Có mã độc";
+            return L.T("Có mã độc");
         if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
             return item.ErrorMessage;
         var text = item.Status switch
         {
-            DownloadStatus.Queued => "Đang chờ",
-            DownloadStatus.Downloading => "Đang tải",
-            DownloadStatus.Paused => "Tạm dừng",
-            DownloadStatus.Later => "Chờ tải sau",
+            DownloadStatus.Queued => L.T("Đang chờ"),
+            DownloadStatus.Downloading => L.T("Đang tải"),
+            DownloadStatus.Paused => L.T("Tạm dừng"),
+            DownloadStatus.Later => L.T("Chờ tải sau"),
             DownloadStatus.Completed => "Xong",
-            _ => "Lỗi",
+            _ => L.T("Lỗi"),
         };
         return !item.CanResume && item.Status is DownloadStatus.Downloading or DownloadStatus.Paused
-            ? $"{text} — Không tải tiếp được"
+            ? L.F("{0} — Không tải tiếp được", text)
             : text;
     }
 }

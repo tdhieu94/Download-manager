@@ -10,7 +10,7 @@ namespace DoMa.Core.Engine.Torrent;
 /// </summary>
 public sealed class TorrentDownloadEngine(YouTubeTools tools) : IDownloadEngine
 {
-    private const string NotReady = "Chưa có công cụ tải torrent. Hãy thêm lại link torrent để DoMa cài công cụ.";
+    private static string NotReady => L.T("Chưa có công cụ tải torrent. Hãy thêm lại link torrent để DoMa cài công cụ.");
 
     /// <summary>Giới hạn tốc độ tải hiện tại (byte/giây, 0 = không giới hạn).</summary>
     public Func<long>? SpeedLimit { get; init; }
@@ -31,7 +31,7 @@ public sealed class TorrentDownloadEngine(YouTubeTools tools) : IDownloadEngine
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
         {
-            return new EngineResult(EngineOutcome.Failed, null, "Không chạy được công cụ tải torrent: " + e.Message);
+            return new EngineResult(EngineOutcome.Failed, null, L.T("Không chạy được công cụ tải torrent: ") + e.Message);
         }
     }
 
@@ -48,7 +48,7 @@ public sealed class TorrentDownloadEngine(YouTubeTools tools) : IDownloadEngine
         };
         foreach (var a in args)
             info.ArgumentList.Add(a);
-        using var process = Process.Start(info) ?? throw new IOException("aria2c không khởi động được.");
+        using var process = Process.Start(info) ?? throw new IOException(L.T("aria2c không khởi động được."));
         var tail = new Queue<string>();
         void Keep(string line)
         {

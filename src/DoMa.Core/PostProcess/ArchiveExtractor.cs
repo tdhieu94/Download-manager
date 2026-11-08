@@ -21,7 +21,7 @@ public static class ArchiveExtractor
             {
                 var destination = Path.GetFullPath(Path.Combine(target, entry.FullName));
                 if (!destination.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException($"Tệp nén chứa đường dẫn không an toàn: {entry.FullName}");
+                    throw new InvalidDataException(L.F("Tệp nén chứa đường dẫn không an toàn: {0}", entry.FullName));
                 if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
                 {
                     Directory.CreateDirectory(destination);

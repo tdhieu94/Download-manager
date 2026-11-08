@@ -61,16 +61,16 @@ public static partial class ReleaseNotes
         return result;
     }
 
-    /// <summary>Phần không tiêu đề → tiếng Việt → các mục khác → tiếng Anh.</summary>
+    /// <summary>Phần không tiêu đề → tiếng Việt → các mục khác → tiếng Anh (giao diện tiếng Anh thì tiếng Anh lên trước).</summary>
     private static int Rank(string? heading)
     {
         if (heading is null)
             return 0;
         var h = heading.ToLowerInvariant();
         if (h.Contains("tiếng việt") || h.Contains("vietnamese"))
-            return 1;
+            return L.English ? 3 : 1;
         if (h.Contains("english") || h.Contains("tiếng anh"))
-            return 3;
+            return L.English ? 1 : 3;
         return 2;
     }
 

@@ -7,13 +7,13 @@ public sealed class UpdateNotesForm : Form
 {
     public UpdateNotesForm(string version, string currentVersion, string notes)
     {
-        Text = "Có gì mới";
+        Text = L.T("Có gì mới");
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(620, 520));
         int S(int v) => Theme.Scale(this, v);
 
-        var install = new ModernButton("Cập nhật ngay", IconKind.Download, ButtonKind.Primary) { DialogResult = DialogResult.OK };
-        var close = new ModernButton("Để sau") { DialogResult = DialogResult.Cancel };
+        var install = new ModernButton(L.T("Cập nhật ngay"), IconKind.Download, ButtonKind.Primary) { DialogResult = DialogResult.OK };
+        var close = new ModernButton(L.T("Để sau")) { DialogResult = DialogResult.Cancel };
         AcceptButton = install;
         CancelButton = close;
 
@@ -31,7 +31,7 @@ public sealed class UpdateNotesForm : Form
             ForeColor = Theme.Text,
             TabStop = false,
             Text = string.IsNullOrWhiteSpace(notes)
-                ? "Bản này chưa có ghi chú cập nhật.\r\nNo release notes for this version."
+                ? L.T("Bản này chưa có ghi chú cập nhật.\r\nNo release notes for this version.")
                 : notes.Replace("\n", "\r\n"),
         };
         Theme.StyleScrollbars(text);
@@ -42,7 +42,7 @@ public sealed class UpdateNotesForm : Form
         Controls.Add(body);
         Controls.Add(DialogParts.Footer(this, install, close));
         Controls.Add(DialogParts.Header(this, IconKind.Download, Theme.Accent, $"DoMa {version}",
-            $"Bạn đang dùng bản {currentVersion}. Các tệp đang tải sẽ tự tải tiếp sau khi cập nhật."));
+            L.F("Bạn đang dùng bản {0}. Các tệp đang tải sẽ tự tải tiếp sau khi cập nhật.", currentVersion)));
         Shown += (_, _) => install.Focus();
     }
 }

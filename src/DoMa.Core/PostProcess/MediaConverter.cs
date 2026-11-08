@@ -42,7 +42,7 @@ public static class MediaConverter
         foreach (var a in args)
             info.ArgumentList.Add(a);
         var output = args[^1];
-        using var process = Process.Start(info) ?? throw new IOException("ffmpeg không khởi động được.");
+        using var process = Process.Start(info) ?? throw new IOException(L.T("ffmpeg không khởi động được."));
         var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
         using (ct.Register(() =>
@@ -71,6 +71,6 @@ public static class MediaConverter
         }
         ct.ThrowIfCancellationRequested();
         var last = errors.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? "";
-        throw new IOException("ffmpeg báo lỗi" + (last.Length > 0 ? ": " + (last.Length > 160 ? last[..160] + "…" : last) : "."));
+        throw new IOException(L.T("ffmpeg báo lỗi") + (last.Length > 0 ? ": " + (last.Length > 160 ? last[..160] + "…" : last) : "."));
     }
 }

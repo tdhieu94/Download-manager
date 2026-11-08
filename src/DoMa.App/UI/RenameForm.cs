@@ -9,18 +9,18 @@ public sealed class RenameForm : Form
 
     public RenameForm(string current)
     {
-        Text = "Đổi tên";
+        Text = L.T("Đổi tên");
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(520, 236));
         int S(int v) => Theme.Scale(this, v);
 
-        var ok = new ModernButton("Đổi tên", IconKind.Check, ButtonKind.Primary) { DialogResult = DialogResult.OK };
-        var cancel = new ModernButton("Huỷ") { DialogResult = DialogResult.Cancel };
+        var ok = new ModernButton(L.T("Đổi tên"), IconKind.Check, ButtonKind.Primary) { DialogResult = DialogResult.OK };
+        var cancel = new ModernButton(L.T("Huỷ")) { DialogResult = DialogResult.Cancel };
         AcceptButton = ok;
         CancelButton = cancel;
 
         var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(S(24), S(4), S(24), 0) };
-        var label = DialogParts.FieldLabel("Tên mới");
+        var label = DialogParts.FieldLabel(L.T("Tên mới"));
         label.Location = new Point(S(24), S(6));
         _name.Text = current;
         _name.SetBounds(S(24), S(32), ClientSize.Width - S(48), S(38));
@@ -30,7 +30,7 @@ public sealed class RenameForm : Form
 
         Controls.Add(body);
         Controls.Add(DialogParts.Footer(this, ok, cancel));
-        Controls.Add(DialogParts.Header(this, IconKind.File, Theme.Accent, "Đổi tên tệp", "Tệp trên ổ đĩa cũng được đổi tên theo."));
+        Controls.Add(DialogParts.Header(this, IconKind.File, Theme.Accent, L.T("Đổi tên tệp"), L.T("Tệp trên ổ đĩa cũng được đổi tên theo.")));
 
         Shown += (_, _) =>
         {

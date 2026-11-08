@@ -1,10 +1,18 @@
+import { t } from "./capture.js";
+
 const status = document.getElementById("status");
 const toggle = document.getElementById("enabled");
 const list = document.getElementById("media");
 const empty = document.getElementById("empty");
 
+// Chữ cố định trong popup.html (viết sẵn tiếng Việt).
+status.textContent = t("Đang kiểm tra…", "Checking…");
+toggle.nextSibling.textContent = " " + t("Bắt link", "Catch links");
+document.querySelector("h2").textContent = t("Video và âm thanh trên trang này", "Video and audio on this page");
+empty.textContent = t("Chưa thấy video nào. Hãy bấm phát video trên trang rồi mở lại.", "No videos found yet. Play the video on the page, then open this again.");
+
 function showStatus(connected) {
-  status.textContent = connected ? "Đã kết nối với DoMa" : "Chưa kết nối với DoMa";
+  status.textContent = connected ? t("Đã kết nối với DoMa", "Connected to DoMa") : t("Chưa kết nối với DoMa", "Not connected to DoMa");
   status.className = connected ? "on" : "off";
 }
 
@@ -28,10 +36,10 @@ function describe(entry) {
       return "";
     }
   })();
-  if (entry.kind === "youtube") return "YouTube · chọn chất lượng trong DoMa";
-  if (entry.kind === "page") return `${entry.site ?? "Video"} · chọn chất lượng trong DoMa`;
-  if (entry.kind === "playlist") return "Playlist YouTube · chọn video trong DoMa";
-  const kind = entry.kind === "hls" ? "Luồng HLS" : entry.name.split(".").pop().toUpperCase();
+  if (entry.kind === "youtube") return t("YouTube · chọn chất lượng trong DoMa", "YouTube · choose quality in DoMa");
+  if (entry.kind === "page") return `${entry.site ?? "Video"} · ${t("chọn chất lượng trong DoMa", "choose quality in DoMa")}`;
+  if (entry.kind === "playlist") return t("Playlist YouTube · chọn video trong DoMa", "YouTube playlist · choose videos in DoMa");
+  const kind = entry.kind === "hls" ? t("Luồng HLS", "HLS stream") : entry.name.split(".").pop().toUpperCase();
   return [kind, formatSize(entry.size), host].filter(Boolean).join(" · ");
 }
 
@@ -51,14 +59,14 @@ function render(tabId, entries) {
     meta.textContent = describe(entry);
     info.append(name, meta);
     const button = document.createElement("button");
-    button.textContent = "Tải";
+    button.textContent = t("Tải", "Download");
     button.addEventListener("click", async () => {
       button.disabled = true;
-      button.textContent = "Đang gửi…";
+      button.textContent = t("Đang gửi…", "Sending…");
       const reply = await chrome.runtime.sendMessage({ type: "media-download", tabId, url: entry.url }).catch(() => null);
-      button.textContent = reply?.ok ? "Đã gửi" : "Lỗi";
+      button.textContent = reply?.ok ? t("Đã gửi", "Sent") : t("Lỗi", "Error");
       if (!reply?.ok) {
-        meta.textContent = "Không gửi được sang DoMa. Hãy mở DoMa rồi thử lại.";
+        meta.textContent = t("Không gửi được sang DoMa. Hãy mở DoMa rồi thử lại.", "Couldn't send to DoMa. Open DoMa and try again.");
         button.disabled = false;
       }
     });

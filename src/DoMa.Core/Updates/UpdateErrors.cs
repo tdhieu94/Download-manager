@@ -36,15 +36,15 @@ public static class UpdateErrors
         var reason = e switch
         {
             InvalidDataException => e.Message,
-            HttpRequestException { StatusCode: HttpStatusCode.NotFound } => "Không tìm thấy bộ cài trên GitHub.",
-            HttpRequestException { StatusCode: { } code } when (int)code >= 500 => $"Máy chủ GitHub đang lỗi ({(int)code}). Thường chỉ vài phút là hết.",
-            HttpRequestException { StatusCode: { } code } => $"GitHub từ chối tải ({(int)code}).",
-            HttpRequestException => "Không kết nối được tới GitHub. Hãy kiểm tra mạng.",
-            TaskCanceledException => "Tải bộ cài quá lâu nên bị ngắt. Mạng có thể đang chậm.",
-            UnauthorizedAccessException => "Windows không cho ghi hoặc chạy bộ cài.",
-            IOException => "Mất kết nối khi đang tải bộ cài.",
+            HttpRequestException { StatusCode: HttpStatusCode.NotFound } => L.T("Không tìm thấy bộ cài trên GitHub."),
+            HttpRequestException { StatusCode: { } code } when (int)code >= 500 => L.F("Máy chủ GitHub đang lỗi ({0}). Thường chỉ vài phút là hết.", (int)code),
+            HttpRequestException { StatusCode: { } code } => L.F("GitHub từ chối tải ({0}).", (int)code),
+            HttpRequestException => L.T("Không kết nối được tới GitHub. Hãy kiểm tra mạng."),
+            TaskCanceledException => L.T("Tải bộ cài quá lâu nên bị ngắt. Mạng có thể đang chậm."),
+            UnauthorizedAccessException => L.T("Windows không cho ghi hoặc chạy bộ cài."),
+            IOException => L.T("Mất kết nối khi đang tải bộ cài."),
             _ => e.Message,
         };
-        return "Không tải được bộ cài cập nhật. " + reason;
+        return L.T("Không tải được bộ cài cập nhật. ") + reason;
     }
 }

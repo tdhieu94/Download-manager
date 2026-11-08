@@ -55,7 +55,7 @@ internal static class Program
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show("DoMa không khởi động được: kênh liên lạc đang bị chương trình khác chiếm.", "Download Manager (DoMa)", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(L.T("DoMa không khởi động được: kênh liên lạc đang bị chương trình khác chiếm."), "Download Manager (DoMa)", MessageBoxButtons.OK, MessageBoxIcon.Error);
             context.Exit();
             return;
         }

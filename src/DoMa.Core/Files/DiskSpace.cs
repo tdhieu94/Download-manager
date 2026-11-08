@@ -40,7 +40,7 @@ public static class DiskSpace
         if (available is not { } left || left >= needed.Value + Reserve)
             return null;
         var drive = DriveName(path);
-        return $"Ổ {drive} không đủ chỗ: cần {Format(needed)}, chỉ còn {Format(Math.Max(0, left))}";
+        return L.F("Ổ {0} không đủ chỗ: cần {1}, chỉ còn {2}", drive, Format(needed), Format(Math.Max(0, left)));
     }
 
     private static string DriveName(string path)
@@ -52,7 +52,7 @@ public static class DiskSpace
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return "đĩa";
+            return L.T("đĩa");
         }
     }
 
@@ -60,7 +60,7 @@ public static class DiskSpace
     public static string Format(long? bytes)
     {
         if (bytes is null or < 0)
-            return "Không rõ";
+            return L.T("Không rõ");
         if (bytes < 1024)
             return $"{bytes} B";
         var value = (double)bytes.Value;

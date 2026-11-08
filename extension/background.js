@@ -1,4 +1,5 @@
 import {
+  t,
   shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, shouldReload,
   manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply,
   collectPageLinks, prepareBatch, hostsOf, toBatchMessage,
@@ -247,24 +248,24 @@ function createMenu() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: "Tải bằng DoMa",
+      title: t("Tải bằng DoMa", "Download with DoMa"),
       contexts: ["link", "image", "video", "audio"],
     });
     chrome.contextMenus.create({
       id: MENU_YT_ID,
-      title: "Tải video này bằng DoMa",
+      title: t("Tải video này bằng DoMa", "Download this video with DoMa"),
       contexts: ["page", "video"],
       documentUrlPatterns: VIDEO_SITES,
     });
     chrome.contextMenus.create({
       id: MENU_PL_ID,
-      title: "Tải cả playlist/kênh này bằng DoMa…",
+      title: t("Tải cả playlist/kênh này bằng DoMa…", "Download this playlist/channel with DoMa…"),
       contexts: ["page"],
       documentUrlPatterns: ["*://*.youtube.com/*"],
     });
     chrome.contextMenus.create({
       id: MENU_ALL_ID,
-      title: "Tải tất cả link bằng DoMa…",
+      title: t("Tải tất cả link bằng DoMa…", "Download all links with DoMa…"),
       contexts: ["page", "selection", "link"],
     });
   });

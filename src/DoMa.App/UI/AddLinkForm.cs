@@ -10,21 +10,23 @@ public sealed class AddLinkForm : Form
 {
     private readonly InputBox _link = new(IconKind.Link) { PlaceholderText = "https://…" };
 
-    public AddLinkForm(string title = "Thêm link tải", string hint = "Dán đường dẫn http hoặc https của tệp bạn muốn tải.",
-        string okText = "Tiếp tục", string? secondaryText = null)
+    public AddLinkForm(string? title = null, string? hint = null, string? okText = null, string? secondaryText = null)
     {
+        title ??= L.T("Thêm link tải");
+        hint ??= L.T("Dán đường dẫn http hoặc https của tệp bạn muốn tải.");
+        okText ??= L.T("Tiếp tục");
         Text = title;
         StartPosition = FormStartPosition.CenterParent;
         DialogParts.ApplyBase(this, new Size(560, 236));
         int S(int v) => Theme.Scale(this, v);
 
         var ok = new ModernButton(okText, IconKind.Download, ButtonKind.Primary) { DialogResult = DialogResult.OK };
-        var cancel = new ModernButton("Huỷ") { DialogResult = DialogResult.Cancel };
+        var cancel = new ModernButton(L.T("Huỷ")) { DialogResult = DialogResult.Cancel };
         AcceptButton = ok;
         CancelButton = cancel;
 
         var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(S(24), S(4), S(24), 0) };
-        var label = DialogParts.FieldLabel("Đường dẫn tải");
+        var label = DialogParts.FieldLabel(L.T("Đường dẫn tải"));
         label.Location = new Point(S(24), S(6));
         _link.SetBounds(S(24), S(32), ClientSize.Width - S(48), S(38));
         _link.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;

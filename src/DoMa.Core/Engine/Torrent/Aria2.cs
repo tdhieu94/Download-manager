@@ -95,15 +95,15 @@ public static partial class Aria2
         var detail = output.LastOrDefault(l => l.Contains("errorCode=", StringComparison.Ordinal) || l.Contains("Exception:", StringComparison.Ordinal))?.Trim();
         var message = code switch
         {
-            2 => ("Không kết nối được với ai đang chia sẻ torrent này (hết thời gian chờ).", true),
-            3 => ("Không tìm thấy tệp torrent.", false),
-            6 or 19 => ("Mất kết nối mạng khi tải torrent.", true),
-            9 => ("Ổ đĩa không đủ chỗ trống.", false),
-            13 => ("Tệp đã có sẵn ở thư mục lưu.", false),
-            16 or 17 or 18 => ("Không ghi được tệp vào thư mục lưu.", false),
-            24 => ("Trang yêu cầu đăng nhập để tải tệp .torrent.", false),
-            26 or 27 or 28 => ("Tệp .torrent hoặc link magnet không hợp lệ.", false),
-            _ => ("Không tải được torrent.", false),
+            2 => (L.T("Không kết nối được với ai đang chia sẻ torrent này (hết thời gian chờ)."), true),
+            3 => (L.T("Không tìm thấy tệp torrent."), false),
+            6 or 19 => (L.T("Mất kết nối mạng khi tải torrent."), true),
+            9 => (L.T("Ổ đĩa không đủ chỗ trống."), false),
+            13 => (L.T("Tệp đã có sẵn ở thư mục lưu."), false),
+            16 or 17 or 18 => (L.T("Không ghi được tệp vào thư mục lưu."), false),
+            24 => (L.T("Trang yêu cầu đăng nhập để tải tệp .torrent."), false),
+            26 or 27 or 28 => (L.T("Tệp .torrent hoặc link magnet không hợp lệ."), false),
+            _ => (L.T("Không tải được torrent."), false),
         };
         return (detail is { Length: > 0 } ? $"{message.Item1} (aria2: {(detail.Length > 160 ? detail[..160] + "…" : detail)})" : message.Item1, message.Item2);
     }

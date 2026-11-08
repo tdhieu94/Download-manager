@@ -51,7 +51,7 @@ public sealed class HlsPlaylist
     {
         var lines = text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         if (lines.Count == 0 || !lines[0].StartsWith("#EXTM3U", StringComparison.Ordinal))
-            return new HlsPlaylist { Unsupported = "Không phải danh sách phát HLS hợp lệ." };
+            return new HlsPlaylist { Unsupported = L.T("Không phải danh sách phát HLS hợp lệ.") };
 
         var variants = new List<HlsVariant>();
         var segments = new List<HlsSegment>();
@@ -88,10 +88,10 @@ public sealed class HlsPlaylist
                         if (Attributes(value).GetValueOrDefault("URI") is { } mapUri && Resolve(baseUri, mapUri) is { } map)
                             init ??= map;
                         if (Attributes(value).ContainsKey("BYTERANGE"))
-                            unsupported ??= "Danh sách phát dùng BYTERANGE, DoMa chưa hỗ trợ.";
+                            unsupported ??= L.T("Danh sách phát dùng BYTERANGE, DoMa chưa hỗ trợ.");
                         break;
                     case "#EXT-X-BYTERANGE":
-                        unsupported ??= "Danh sách phát dùng BYTERANGE, DoMa chưa hỗ trợ.";
+                        unsupported ??= L.T("Danh sách phát dùng BYTERANGE, DoMa chưa hỗ trợ.");
                         break;
                     case "#EXT-X-KEY":
                         var k = Attributes(value);
@@ -102,7 +102,7 @@ public sealed class HlsPlaylist
                                  && k.GetValueOrDefault("URI") is { } keyUri && Resolve(baseUri, keyUri) is { } resolved)
                             key = new HlsKey(resolved, ParseIv(k.GetValueOrDefault("IV")));
                         else
-                            unsupported ??= "Video được bảo vệ bản quyền (DRM), không thể tải.";
+                            unsupported ??= L.T("Video được bảo vệ bản quyền (DRM), không thể tải.");
                         break;
                 }
                 continue;
@@ -124,7 +124,7 @@ public sealed class HlsPlaylist
         }
 
         if (variants.Count == 0 && segments.Count == 0)
-            unsupported ??= "Danh sách phát không có đoạn video nào.";
+            unsupported ??= L.T("Danh sách phát không có đoạn video nào.");
         return new HlsPlaylist { Variants = variants, Segments = segments, InitSegment = init, Ended = ended, Unsupported = unsupported };
     }
 

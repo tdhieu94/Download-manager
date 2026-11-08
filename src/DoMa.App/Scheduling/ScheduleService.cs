@@ -59,11 +59,11 @@ internal sealed class ScheduleService : IDisposable
         var parts = new List<string>();
         var s = _settings();
         if (s.SpeedLimitKBps > 0)
-            parts.Add($"Giới hạn {UI.DownloadView.FormatSpeed(s.SpeedLimitKBps * 1024.0)}");
+            parts.Add(L.F("Giới hạn {0}", UI.DownloadView.FormatSpeed(s.SpeedLimitKBps * 1024.0)));
         if (s.ScheduleEnabled && ScheduleClock.TryParse(s.ScheduleStart, out var start))
-            parts.Add(ScheduleClock.TryParse(s.ScheduleStop, out var stop) ? $"Lịch {start:HH\\:mm}–{stop:HH\\:mm}" : $"Lịch từ {start:HH\\:mm}");
+            parts.Add(ScheduleClock.TryParse(s.ScheduleStop, out var stop) ? L.F("Lịch {0:HH\\:mm}–{1:HH\\:mm}", start, stop) : L.F("Lịch từ {0:HH\\:mm}", start));
         if (AfterDone != AfterDone.Nothing)
-            parts.Add(AfterDone == AfterDone.Sleep ? "Xong sẽ cho máy ngủ" : "Xong sẽ tắt máy");
+            parts.Add(AfterDone == AfterDone.Sleep ? L.T("Xong sẽ cho máy ngủ") : L.T("Xong sẽ tắt máy"));
         return string.Join(" · ", parts);
     }
 
@@ -93,7 +93,7 @@ internal sealed class ScheduleService : IDisposable
                 _scheduled.Clear();
                 _scheduled.UnionWith(ids);
                 _manager.Resume(ids);
-                _notify($"Đã bắt đầu tải theo lịch: {ids.Count} tệp.");
+                _notify(L.F("Đã bắt đầu tải theo lịch: {0} tệp.", ids.Count));
                 break;
             case ScheduleAction.Stop:
                 var stopIds = _manager.Items
@@ -103,7 +103,7 @@ internal sealed class ScheduleService : IDisposable
                 if (stopIds.Count == 0)
                     return;
                 _manager.Defer(stopIds);
-                _notify($"Hết giờ tải theo lịch: {stopIds.Count} tệp được đưa về hàng chờ.");
+                _notify(L.F("Hết giờ tải theo lịch: {0} tệp được đưa về hàng chờ.", stopIds.Count));
                 break;
         }
     }

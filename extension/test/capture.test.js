@@ -318,3 +318,9 @@ test("video pages on other sites", () => {
   assert.equal(isPageMedia("https://www.youtube.com/@kenh"), true);
   assert.equal(isPageMedia("https://example.com/a.zip"), false);
 });
+
+test("UI text follows the browser language", async () => {
+  const { t } = await import("../capture.js");
+  assert.equal(t("Tải", "Download", "vi-VN"), "Tải");
+  assert.equal(t("Tải", "Download", "en-US"), "Download");
+});

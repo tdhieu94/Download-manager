@@ -50,6 +50,9 @@ public class Settings
     /// <summary>Giao diện: "System" (theo Windows), "Light" hoặc "Dark".</summary>
     public string Appearance { get; set; } = "System";
 
+    /// <summary>Ngôn ngữ giao diện: "auto" (theo Windows), "vi" hoặc "en".</summary>
+    public string Language { get; set; } = "vi";
+
     /// <summary>Hằng ngày tự bắt đầu các tệp "Chờ tải sau" vào giờ này (định dạng HH:mm).</summary>
     public bool ScheduleEnabled { get; set; }
     public string ScheduleStart { get; set; } = "23:00";

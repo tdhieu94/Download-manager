@@ -6,7 +6,7 @@ namespace DoMa.App.UI.Controls;
 public sealed class MediaChoice : Panel
 {
     private readonly ComboBox _quality = new() { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
-    private readonly CheckBox _subtitles = new() { Text = "Tải kèm phụ đề (Việt, Anh)", AutoSize = true };
+    private readonly CheckBox _subtitles = new() { Text = L.T("Tải kèm phụ đề (Việt, Anh)"), AutoSize = true };
     private readonly IReadOnlyList<(string Value, string Label)> _items;
     private readonly CheckBox? _clip;
     private readonly TextBox? _from;
@@ -25,7 +25,7 @@ public sealed class MediaChoice : Panel
         _duration = duration;
         BackColor = Theme.Surface;
         _items = MediaQualities.For(heights);
-        var label = new Label { Text = "Chất lượng", AutoSize = true, Font = Theme.BodySemibold, ForeColor = Theme.Text };
+        var label = new Label { Text = L.T("Chất lượng"), AutoSize = true, Font = Theme.BodySemibold, ForeColor = Theme.Text };
         _quality.Font = Theme.Body;
         _quality.BackColor = Theme.Surface;
         _quality.ForeColor = Theme.Text;
@@ -40,11 +40,11 @@ public sealed class MediaChoice : Panel
         Label? toLabel = null;
         if (clip)
         {
-            _clip = new CheckBox { Text = "Chỉ tải đoạn từ", AutoSize = true, Font = Theme.Body, ForeColor = Theme.Text };
+            _clip = new CheckBox { Text = L.T("Chỉ tải đoạn từ"), AutoSize = true, Font = Theme.Body, ForeColor = Theme.Text };
             _from = new TextBox { Text = "0:00", Font = Theme.Body, BackColor = Theme.Surface, ForeColor = Theme.Text, Enabled = false, TextAlign = HorizontalAlignment.Center };
-            _to = new TextBox { Text = duration is { } d ? MediaOptions.FormatTime(d) : "", PlaceholderText = "hết", Font = Theme.Body, BackColor = Theme.Surface, ForeColor = Theme.Text, Enabled = false, TextAlign = HorizontalAlignment.Center };
-            toLabel = new Label { Text = "đến", AutoSize = true, Font = Theme.Body, ForeColor = Theme.Text };
-            var hint = new Label { Text = "(phút:giây)", AutoSize = true, Font = Theme.Small, ForeColor = Theme.TextMuted, Name = "hint" };
+            _to = new TextBox { Text = duration is { } d ? MediaOptions.FormatTime(d) : "", PlaceholderText = L.T("hết"), Font = Theme.Body, BackColor = Theme.Surface, ForeColor = Theme.Text, Enabled = false, TextAlign = HorizontalAlignment.Center };
+            toLabel = new Label { Text = L.T("đến"), AutoSize = true, Font = Theme.Body, ForeColor = Theme.Text };
+            var hint = new Label { Text = L.T("(phút:giây)"), AutoSize = true, Font = Theme.Small, ForeColor = Theme.TextMuted, Name = "hint" };
             _clip.CheckedChanged += (_, _) =>
             {
                 _from.Enabled = _to.Enabled = _clip.Checked;
@@ -104,11 +104,11 @@ public sealed class MediaChoice : Panel
             var endText = _to!.Text.Trim();
             var end = endText.Length == 0 ? null : MediaOptions.ParseTime(endText);
             if (start is null || (endText.Length > 0 && end is null))
-                return "Thời điểm cắt đoạn phải có dạng phút:giây, ví dụ 1:30.";
+                return L.T("Thời điểm cắt đoạn phải có dạng phút:giây, ví dụ 1:30.");
             if (end is { } e && e <= start)
-                return "Thời điểm kết thúc phải sau thời điểm bắt đầu.";
+                return L.T("Thời điểm kết thúc phải sau thời điểm bắt đầu.");
             if (_duration is { } d && start >= d)
-                return $"Video chỉ dài {MediaOptions.FormatTime(d)}.";
+                return L.F("Video chỉ dài {0}.", MediaOptions.FormatTime(d));
             return null;
         }
     }

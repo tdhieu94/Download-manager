@@ -66,7 +66,7 @@ public sealed class YouTubeTools(string folder, HttpClient http)
     {
         using var zip = ZipFile.OpenRead(zipPath);
         var entry = zip.Entries.FirstOrDefault(e => e.Name.Equals("aria2c.exe", StringComparison.OrdinalIgnoreCase) || e.Name == "aria2c")
-            ?? throw new InvalidDataException("Không tìm thấy aria2c trong gói tải về.");
+            ?? throw new InvalidDataException(L.T("Không tìm thấy aria2c trong gói tải về."));
         entry.ExtractToFile(Path.Combine(folder, entry.Name), true);
     }
 
@@ -216,7 +216,7 @@ public sealed class YouTubeTools(string folder, HttpClient http)
     {
         using var zip = ZipFile.OpenRead(zipPath);
         var entry = zip.Entries.FirstOrDefault(e => e.Name.Equals("deno.exe", StringComparison.OrdinalIgnoreCase) || e.Name == "deno")
-            ?? throw new InvalidDataException("Không tìm thấy deno trong gói tải về.");
+            ?? throw new InvalidDataException(L.T("Không tìm thấy deno trong gói tải về."));
         entry.ExtractToFile(Path.Combine(folder, entry.Name), true);
     }
 
@@ -234,7 +234,7 @@ public sealed class YouTubeTools(string folder, HttpClient http)
             found |= name.StartsWith("ffmpeg", StringComparison.Ordinal);
         }
         if (!found)
-            throw new InvalidDataException("Không tìm thấy ffmpeg trong gói tải về.");
+            throw new InvalidDataException(L.T("Không tìm thấy ffmpeg trong gói tải về."));
     }
 
     private static void TryDelete(string path)

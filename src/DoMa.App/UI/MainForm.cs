@@ -25,17 +25,17 @@ public sealed class MainForm : Form
 
     private static readonly NavItem[] NavEntries =
     [
-        new(null, "Trạng thái", IconKind.None),
-        new(DownloadFilter.All, "Tất cả", IconKind.Inbox),
-        new(DownloadFilter.Active, "Đang tải", IconKind.Download),
-        new(DownloadFilter.Completed, "Đã xong", IconKind.Check),
-        new(DownloadFilter.Later, "Chờ tải sau", IconKind.Clock),
-        new(null, "Loại file", IconKind.None),
-        new(DownloadFilter.Documents, "Tài liệu", IconKind.Document),
-        new(DownloadFilter.Software, "Phần mềm", IconKind.Package),
-        new(DownloadFilter.Archives, "Nén", IconKind.Archive),
-        new(DownloadFilter.Media, "Video, nhạc", IconKind.Play),
-        new(DownloadFilter.Other, "Khác", IconKind.Shapes),
+        new(null, L.T("Trạng thái"), IconKind.None),
+        new(DownloadFilter.All, L.T("Tất cả"), IconKind.Inbox),
+        new(DownloadFilter.Active, L.T("Đang tải"), IconKind.Download),
+        new(DownloadFilter.Completed, L.T("Đã xong"), IconKind.Check),
+        new(DownloadFilter.Later, L.T("Chờ tải sau"), IconKind.Clock),
+        new(null, L.T("Loại file"), IconKind.None),
+        new(DownloadFilter.Documents, L.T("Tài liệu"), IconKind.Document),
+        new(DownloadFilter.Software, L.T("Phần mềm"), IconKind.Package),
+        new(DownloadFilter.Archives, L.T("Nén"), IconKind.Archive),
+        new(DownloadFilter.Media, L.T("Video, nhạc"), IconKind.Play),
+        new(DownloadFilter.Other, L.T("Khác"), IconKind.Shapes),
     ];
 
     private readonly DownloadManager _manager;
@@ -62,17 +62,17 @@ public sealed class MainForm : Form
     private readonly ErrorLog _log;
     private readonly NavList _nav = new();
     private readonly SmoothGrid _grid = new();
-    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = "Tìm theo tên file  (Ctrl+F)" };
+    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = L.T("Tìm theo tên file  (Ctrl+F)") };
     private readonly Label _viewTitle = new() { Font = Theme.Title, ForeColor = Theme.Text, AutoSize = true };
     private readonly Label _viewCount = new() { Font = Theme.Small, ForeColor = Theme.TextMuted, AutoSize = true };
-    private readonly ModernButton _resume = new("Tiếp tục", IconKind.Play);
-    private readonly ModernButton _pause = new("Tạm dừng", IconKind.Pause);
-    private readonly ModernButton _remove = new("Xoá", IconKind.Trash);
+    private readonly ModernButton _resume = new(L.T("Tiếp tục"), IconKind.Play);
+    private readonly ModernButton _pause = new(L.T("Tạm dừng"), IconKind.Pause);
+    private readonly ModernButton _remove = new(L.T("Xoá"), IconKind.Trash);
     private readonly Panel _statusBar = new();
     private readonly Panel _updateBanner = new();
-    private readonly ModernButton _updateNow = new("Cập nhật ngay", IconKind.Download, ButtonKind.Primary);
-    private readonly ModernButton _updateLater = new("Để sau", IconKind.None, ButtonKind.Ghost);
-    private readonly ModernButton _updateNotes = new("Có gì mới", IconKind.Document, ButtonKind.Secondary);
+    private readonly ModernButton _updateNow = new(L.T("Cập nhật ngay"), IconKind.Download, ButtonKind.Primary);
+    private readonly ModernButton _updateLater = new(L.T("Để sau"), IconKind.None, ButtonKind.Ghost);
+    private readonly ModernButton _updateNotes = new(L.T("Có gì mới"), IconKind.Document, ButtonKind.Secondary);
     // Control.Visible trả về false khi cửa sổ đang ẩn ở khay, nên tự nhớ nút nào cần hiện để xếp chỗ cho đúng.
     private bool _updateLaterShown = true;
     private bool _updateNotesShown;
@@ -104,7 +104,7 @@ public sealed class MainForm : Form
         _shutdown = shutdown;
         _log = log;
 
-        Text = "DoMa — Trình quản lý tải xuống";
+        Text = L.T("DoMa — Trình quản lý tải xuống");
         Icon = Theme.AppIcon;
         StartPosition = FormStartPosition.CenterScreen;
         Font = Theme.Body;
@@ -237,8 +237,8 @@ public sealed class MainForm : Form
         if (item.Threat is not null)
         {
             var answer = MessageBox.Show(this,
-                $"“{Path.GetFileName(item.TargetPath)}” bị phát hiện có mã độc ({item.Threat}).\n\nMở tệp này có thể làm hại máy tính và dữ liệu của bạn. Bạn vẫn muốn mở?",
-                "Cảnh báo bảo mật", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                L.F("“{0}” bị phát hiện có mã độc ({1}).\n\nMở tệp này có thể làm hại máy tính và dữ liệu của bạn. Bạn vẫn muốn mở?", Path.GetFileName(item.TargetPath), item.Threat),
+                L.T("Cảnh báo bảo mật"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
             if (answer != DialogResult.Yes)
                 return;
         }
@@ -249,7 +249,7 @@ public sealed class MainForm : Form
     {
         if (!File.Exists(path))
         {
-            MessageBox.Show("Không tìm thấy tệp trên ổ đĩa.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(L.T("Không tìm thấy tệp trên ổ đĩa."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         try
@@ -258,7 +258,7 @@ public sealed class MainForm : Form
         }
         catch (Win32Exception)
         {
-            MessageBox.Show("Không mở được tệp.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(L.T("Không mở được tệp."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -273,7 +273,7 @@ public sealed class MainForm : Form
         }
         catch (Win32Exception)
         {
-            MessageBox.Show("Không mở được thư mục.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(L.T("Không mở được thư mục."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -290,22 +290,22 @@ public sealed class MainForm : Form
             var logo = S(34);
             g.DrawImage(_logo, new Rectangle(S(22), (header.Height - logo) / 2, logo, logo));
             TextRenderer.DrawText(g, "DoMa", Theme.Brand, new Point(S(66), S(12)), Theme.Text, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, "Trình quản lý tải xuống", Theme.Small, new Point(S(67), S(35)), Theme.TextMuted, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, L.T("Trình quản lý tải xuống"), Theme.Small, new Point(S(67), S(35)), Theme.TextMuted, TextFormatFlags.NoPadding);
             using var pen = new Pen(Theme.Border);
             g.DrawLine(pen, 0, header.Height - 1, header.Width, header.Height - 1);
         };
 
-        var add = new ModernButton("Thêm link", IconKind.Plus, ButtonKind.Primary);
+        var add = new ModernButton(L.T("Thêm link"), IconKind.Plus, ButtonKind.Primary);
         add.Click += async (_, _) => await AddLinkAsync();
-        _tips.SetToolTip(add, "Thêm đường dẫn tải mới (Ctrl+N)");
+        _tips.SetToolTip(add, L.T("Thêm đường dẫn tải mới (Ctrl+N)"));
 
-        var speed = new ModernButton("Tốc độ và lịch", IconKind.Gauge, ButtonKind.Ghost) { IconOnly = true };
+        var speed = new ModernButton(L.T("Tốc độ và lịch"), IconKind.Gauge, ButtonKind.Ghost) { IconOnly = true };
         speed.Click += (_, _) => ShowQuickMenu(speed);
-        _tips.SetToolTip(speed, "Giới hạn tốc độ, tải theo lịch, việc làm khi tải xong");
+        _tips.SetToolTip(speed, L.T("Giới hạn tốc độ, tải theo lịch, việc làm khi tải xong"));
 
-        var settings = new ModernButton("Cài đặt", IconKind.Settings, ButtonKind.Ghost) { IconOnly = true };
+        var settings = new ModernButton(L.T("Cài đặt"), IconKind.Settings, ButtonKind.Ghost) { IconOnly = true };
         settings.Click += (_, _) => _openSettings();
-        _tips.SetToolTip(settings, "Cài đặt");
+        _tips.SetToolTip(settings, L.T("Cài đặt"));
 
         var actions = new FlowLayoutPanel
         {
@@ -328,7 +328,7 @@ public sealed class MainForm : Form
 
     private static readonly (int KBps, string Text)[] SpeedPresets =
     [
-        (0, "Không giới hạn"),
+        (0, L.T("Không giới hạn")),
         (256, "256 KB/s"),
         (512, "512 KB/s"),
         (1024, "1 MB/s"),
@@ -345,7 +345,7 @@ public sealed class MainForm : Form
         menu.ShowCheckMargin = true;
         menu.ShowImageMargin = false;
 
-        AddHeader(menu, "Tốc độ tối đa");
+        AddHeader(menu, L.T("Tốc độ tối đa"));
         var current = quick.SpeedLimit();
         var preset = false;
         foreach (var (kbps, text) in SpeedPresets)
@@ -356,25 +356,25 @@ public sealed class MainForm : Form
             menu.Items.Add(item);
         }
         if (!preset)
-            menu.Items.Add(new ToolStripMenuItem($"Tuỳ chỉnh: {DownloadView.FormatSpeed(current * 1024.0)}") { Checked = true, Enabled = false });
-        menu.Items.Add(new ToolStripMenuItem("Đặt mức khác…", null, (_, _) => _openSettings()));
+            menu.Items.Add(new ToolStripMenuItem(L.F("Tuỳ chỉnh: {0}", DownloadView.FormatSpeed(current * 1024.0))) { Checked = true, Enabled = false });
+        menu.Items.Add(new ToolStripMenuItem(L.T("Đặt mức khác…"), null, (_, _) => _openSettings()));
 
         menu.Items.Add(new ToolStripSeparator());
-        AddHeader(menu, "Hàng chờ");
-        menu.Items.Add(new ToolStripMenuItem("Bắt đầu tải hàng “Chờ tải sau” ngay", null, (_, _) =>
+        AddHeader(menu, L.T("Hàng chờ"));
+        menu.Items.Add(new ToolStripMenuItem(L.T("Bắt đầu tải hàng “Chờ tải sau” ngay"), null, (_, _) =>
         {
             if (quick.StartLaterNow() == 0)
-                MessageBox.Show(this, "Hàng “Chờ tải sau” đang trống.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, L.T("Hàng “Chờ tải sau” đang trống."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }));
-        menu.Items.Add(new ToolStripMenuItem("Hẹn giờ tải tự động…", null, (_, _) => _openSettings()));
-        menu.Items.Add(new ToolStripMenuItem("Dọn tệp đã tải xong khỏi danh sách…", null, (_, _) => ClearCompleted()));
+        menu.Items.Add(new ToolStripMenuItem(L.T("Hẹn giờ tải tự động…"), null, (_, _) => _openSettings()));
+        menu.Items.Add(new ToolStripMenuItem(L.T("Dọn tệp đã tải xong khỏi danh sách…"), null, (_, _) => ClearCompleted()));
         if (quick.ManageChannels is { } channels)
-            menu.Items.Add(new ToolStripMenuItem("Kênh YouTube đang theo dõi…", null, (_, _) => channels()));
+            menu.Items.Add(new ToolStripMenuItem(L.T("Kênh YouTube đang theo dõi…"), null, (_, _) => channels()));
 
         menu.Items.Add(new ToolStripSeparator());
-        AddHeader(menu, "Khi tải xong tất cả");
+        AddHeader(menu, L.T("Khi tải xong tất cả"));
         var after = quick.AfterDone();
-        foreach (var (value, text) in new[] { (Scheduling.AfterDone.Nothing, "Không làm gì"), (Scheduling.AfterDone.Sleep, "Cho máy ngủ"), (Scheduling.AfterDone.Shutdown, "Tắt máy") })
+        foreach (var (value, text) in new[] { (Scheduling.AfterDone.Nothing, L.T("Không làm gì")), (Scheduling.AfterDone.Sleep, L.T("Cho máy ngủ")), (Scheduling.AfterDone.Shutdown, L.T("Tắt máy")) })
         {
             var item = new ToolStripMenuItem(text) { Checked = after == value };
             item.Click += (_, _) => { quick.SetAfterDone(value); RefreshStatus(); };
@@ -390,12 +390,12 @@ public sealed class MainForm : Form
         var done = _manager.Items.Where(i => i.Status == DownloadStatus.Completed).Select(i => i.Id).ToList();
         if (done.Count == 0)
         {
-            MessageBox.Show(this, "Chưa có tệp nào tải xong.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, L.T("Chưa có tệp nào tải xong."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         var answer = MessageBox.Show(this,
-            $"Bỏ {done.Count} tệp đã tải xong khỏi danh sách?\n\nTệp trên ổ đĩa vẫn được giữ nguyên.",
-            "Dọn danh sách", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+            L.F("Bỏ {0} tệp đã tải xong khỏi danh sách?\n\nTệp trên ổ đĩa vẫn được giữ nguyên.", done.Count),
+            L.T("Dọn danh sách"), MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
         if (answer == DialogResult.OK)
             RunLogged(() => _manager.Remove(done, false));
     }
@@ -480,9 +480,9 @@ public sealed class MainForm : Form
         _resume.Click += (_, _) => _manager.Resume(SelectedIds());
         _pause.Click += (_, _) => _manager.Pause(SelectedIds());
         _remove.Click += (_, _) => RemoveSelected();
-        _tips.SetToolTip(_resume, "Tiếp tục tải các tệp đã chọn (Space)");
-        _tips.SetToolTip(_pause, "Tạm dừng các tệp đã chọn (Space)");
-        _tips.SetToolTip(_remove, "Xoá các tệp đã chọn (Delete)");
+        _tips.SetToolTip(_resume, L.T("Tiếp tục tải các tệp đã chọn (Space)"));
+        _tips.SetToolTip(_pause, L.T("Tạm dừng các tệp đã chọn (Space)"));
+        _tips.SetToolTip(_remove, L.T("Xoá các tệp đã chọn (Delete)"));
         foreach (var b in new[] { _resume, _pause, _remove })
             b.Margin = new Padding(0, 0, S(6), 0);
         tools.Controls.AddRange([_search, _resume, _pause, _remove]);
@@ -616,13 +616,13 @@ public sealed class MainForm : Form
         _grid.RowTemplate.Height = S(54);
 
         var muted = new DataGridViewCellStyle { ForeColor = Theme.TextSecondary, SelectionForeColor = Theme.TextSecondary };
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = "TÊN FILE", FillWeight = 40, MinimumWidth = S(200) });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Size", HeaderText = "DUNG LƯỢNG", FillWeight = 13, DefaultCellStyle = muted });
-        _grid.Columns.Add(new ProgressColumn { Name = "Progress", HeaderText = "TIẾN ĐỘ", FillWeight = 22 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Speed", HeaderText = "TỐC ĐỘ", FillWeight = 12, DefaultCellStyle = muted });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Eta", HeaderText = "CÒN LẠI", FillWeight = 12, DefaultCellStyle = muted });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time", HeaderText = "THỜI GIAN", FillWeight = 17, MinimumWidth = S(118), DefaultCellStyle = muted });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "TRẠNG THÁI", FillWeight = 22 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = L.T("TÊN FILE"), FillWeight = 40, MinimumWidth = S(200) });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Size", HeaderText = L.T("DUNG LƯỢNG"), FillWeight = 13, DefaultCellStyle = muted });
+        _grid.Columns.Add(new ProgressColumn { Name = "Progress", HeaderText = L.T("TIẾN ĐỘ"), FillWeight = 22 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Speed", HeaderText = L.T("TỐC ĐỘ"), FillWeight = 12, DefaultCellStyle = muted });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Eta", HeaderText = L.T("CÒN LẠI"), FillWeight = 12, DefaultCellStyle = muted });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time", HeaderText = L.T("THỜI GIAN"), FillWeight = 17, MinimumWidth = S(118), DefaultCellStyle = muted });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = L.T("TRẠNG THÁI"), FillWeight = 22 });
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         foreach (DataGridViewColumn column in _grid.Columns)
             column.SortMode = DataGridViewColumnSortMode.NotSortable;
@@ -776,10 +776,10 @@ public sealed class MainForm : Form
             g.FillEllipse(brush, circle);
         var searching = _search.Text.Trim().Length > 0;
         Icons.Draw(g, searching ? IconKind.Search : IconKind.Download, RectangleF.Inflate(circle, -S(18), -S(18)), Theme.Accent);
-        var title = searching ? "Không tìm thấy tệp phù hợp" : "Chưa có tệp nào ở đây";
+        var title = searching ? L.T("Không tìm thấy tệp phù hợp") : L.T("Chưa có tệp nào ở đây");
         var hint = searching
-            ? "Thử từ khoá khác hoặc xoá ô tìm kiếm."
-            : "Bấm “Thêm link” hoặc tải từ trình duyệt — tệp sẽ xuất hiện tại đây.";
+            ? L.T("Thử từ khoá khác hoặc xoá ô tìm kiếm.")
+            : L.T("Bấm “Thêm link” hoặc tải từ trình duyệt — tệp sẽ xuất hiện tại đây.");
         TextRenderer.DrawText(g, title, Theme.Subtitle, new Rectangle(area.X, (int)circle.Bottom + S(16), area.Width, S(28)), Theme.Text,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.Top);
         TextRenderer.DrawText(g, hint, Theme.Body, new Rectangle(area.X, (int)circle.Bottom + S(46), area.Width, S(24)), Theme.TextMuted,
@@ -789,30 +789,30 @@ public sealed class MainForm : Form
     private ContextMenuStrip BuildContextMenu()
     {
         var menu = ThemedRenderer.CreateMenu();
-        ThemedRenderer.Item(menu, "Mở file", IconKind.File, (_, _) => ForFirst(OpenItem)).ShortcutKeyDisplayString = "Enter";
-        ThemedRenderer.Item(menu, "Mở thư mục", IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath))).ShortcutKeyDisplayString = "Ctrl+O";
-        var source = ThemedRenderer.Item(menu, "Mở trang nguồn", IconKind.Link, (_, _) => ForFirst(OpenSource));
+        ThemedRenderer.Item(menu, L.T("Mở file"), IconKind.File, (_, _) => ForFirst(OpenItem)).ShortcutKeyDisplayString = "Enter";
+        ThemedRenderer.Item(menu, L.T("Mở thư mục"), IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath))).ShortcutKeyDisplayString = "Ctrl+O";
+        var source = ThemedRenderer.Item(menu, L.T("Mở trang nguồn"), IconKind.Link, (_, _) => ForFirst(OpenSource));
         ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink)).ShortcutKeyDisplayString = "Ctrl+C";
-        var rename = ThemedRenderer.Item(menu, "Đổi tên…", IconKind.File, (_, _) => ForFirst(RenameItem));
+        var rename = ThemedRenderer.Item(menu, L.T("Đổi tên…"), IconKind.File, (_, _) => ForFirst(RenameItem));
         rename.ShortcutKeyDisplayString = "F2";
         menu.Items.Add(new ToolStripSeparator());
-        var hash = ThemedRenderer.Item(menu, "Kiểm tra mã băm…", IconKind.Hash, (_, _) => ForFirst(i =>
+        var hash = ThemedRenderer.Item(menu, L.T("Kiểm tra mã băm…"), IconKind.Hash, (_, _) => ForFirst(i =>
         {
             using var dialog = new HashForm(i.TargetPath);
             dialog.ShowDialog(this);
         }));
-        var scan = ThemedRenderer.Item(menu, "Quét bằng Windows Defender", IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i)));
-        var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
-        var mp4 = ThemedRenderer.Item(menu, "Chuyển sang MP4", IconKind.Refresh, (_, _) => ForFirst(i => ConvertMedia?.Invoke(i, ".mp4")));
-        var mp3 = ThemedRenderer.Item(menu, "Tách nhạc MP3", IconKind.Refresh, (_, _) => ForFirst(i => ConvertMedia?.Invoke(i, ".mp3")));
+        var scan = ThemedRenderer.Item(menu, L.T("Quét bằng Windows Defender"), IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i)));
+        var extract = ThemedRenderer.Item(menu, L.T("Giải nén tại đây"), IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
+        var mp4 = ThemedRenderer.Item(menu, L.T("Chuyển sang MP4"), IconKind.Refresh, (_, _) => ForFirst(i => ConvertMedia?.Invoke(i, ".mp4")));
+        var mp3 = ThemedRenderer.Item(menu, L.T("Tách nhạc MP3"), IconKind.Refresh, (_, _) => ForFirst(i => ConvertMedia?.Invoke(i, ".mp3")));
         menu.Items.Add(new ToolStripSeparator());
-        var startFirst = ThemedRenderer.Item(menu, "Tải trước", IconKind.Play, (_, _) =>
+        var startFirst = ThemedRenderer.Item(menu, L.T("Tải trước"), IconKind.Play, (_, _) =>
         {
             var ids = SelectedIds();
             RunLogged(() => _manager.StartFirst(ids));
         });
-        var refresh = ThemedRenderer.Item(menu, "Làm mới link…", IconKind.Link, (_, _) => ForFirst(RefreshLink));
-        ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
+        var refresh = ThemedRenderer.Item(menu, L.T("Làm mới link…"), IconKind.Link, (_, _) => ForFirst(RefreshLink));
+        ThemedRenderer.Item(menu, L.T("Tải lại"), IconKind.Refresh, (_, _) =>
         {
             var ids = SelectedIds();
             RunLogged(() =>
@@ -821,7 +821,7 @@ public sealed class MainForm : Form
                     _manager.Restart(id);
             });
         });
-        ThemedRenderer.Item(menu, "Xoá", IconKind.Trash, (_, _) => RemoveSelected(), Theme.Danger).ShortcutKeyDisplayString = "Delete";
+        ThemedRenderer.Item(menu, L.T("Xoá"), IconKind.Trash, (_, _) => RemoveSelected(), Theme.Danger).ShortcutKeyDisplayString = "Delete";
         menu.Opening += (_, e) =>
         {
             e.Cancel = _grid.SelectedRows.Count == 0;
@@ -859,9 +859,9 @@ public sealed class MainForm : Form
             RunLogged(() => _manager.MarkThreat(item.Id, null));
         var (text, icon) = result switch
         {
-            Core.PostProcess.ScanResult.Clean => ($"Không phát hiện mối nguy trong “{Path.GetFileName(path)}”.", MessageBoxIcon.Information),
-            Core.PostProcess.ScanResult.Unavailable => ("Máy này không có Windows Defender.", MessageBoxIcon.Information),
-            _ => ("Không quét được tệp. Windows Defender có thể đang tắt hoặc bị chương trình diệt virus khác thay thế.", MessageBoxIcon.Warning),
+            Core.PostProcess.ScanResult.Clean => (L.F("Không phát hiện mối nguy trong “{0}”.", Path.GetFileName(path)), MessageBoxIcon.Information),
+            Core.PostProcess.ScanResult.Unavailable => (L.T("Máy này không có Windows Defender."), MessageBoxIcon.Information),
+            _ => (L.T("Không quét được tệp. Windows Defender có thể đang tắt hoặc bị chương trình diệt virus khác thay thế."), MessageBoxIcon.Warning),
         };
         MessageBox.Show(this, text, AppTitle, MessageBoxButtons.OK, icon);
     }
@@ -875,7 +875,7 @@ public sealed class MainForm : Form
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
         {
-            MessageBox.Show(this, "Không giải nén được: " + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, L.T("Không giải nén được: ") + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -933,8 +933,8 @@ public sealed class MainForm : Form
     private List<string> PromptLinks()
     {
         using var dialog = new AddLinkForm(
-            hint: "Dán một hoặc nhiều link http/https hoặc magnet, cách nhau bởi dấu cách. Có thể nhập từ tệp .txt.",
-            secondaryText: "Nhập từ tệp .txt…");
+            hint: L.T("Dán một hoặc nhiều link http/https hoặc magnet, cách nhau bởi dấu cách. Có thể nhập từ tệp .txt."),
+            secondaryText: L.T("Nhập từ tệp .txt…"));
         var answer = dialog.ShowDialog(this);
         if (answer == DialogResult.Retry)
             return ImportLinks();
@@ -942,7 +942,7 @@ public sealed class MainForm : Form
             return [];
         var links = ExtractLinks(dialog.Link);
         if (links.Count == 0)
-            MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, L.T("Đường dẫn không hợp lệ."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         return links;
     }
 
@@ -951,8 +951,8 @@ public sealed class MainForm : Form
     {
         using var open = new OpenFileDialog
         {
-            Title = "Chọn tệp chứa danh sách link",
-            Filter = "Tệp văn bản (*.txt)|*.txt|Mọi tệp (*.*)|*.*",
+            Title = L.T("Chọn tệp chứa danh sách link"),
+            Filter = L.T("Tệp văn bản (*.txt)|*.txt|Mọi tệp (*.*)|*.*"),
         };
         if (open.ShowDialog(this) != DialogResult.OK)
             return [];
@@ -961,19 +961,19 @@ public sealed class MainForm : Form
         {
             if (new FileInfo(open.FileName).Length > 10 * 1024 * 1024)
             {
-                MessageBox.Show(this, "Tệp quá lớn (tối đa 10 MB).", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, L.T("Tệp quá lớn (tối đa 10 MB)."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return [];
             }
             text = File.ReadAllText(open.FileName);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, "Không đọc được tệp: " + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, L.T("Không đọc được tệp: ") + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return [];
         }
         var links = ExtractLinks(text);
         if (links.Count == 0)
-            MessageBox.Show(this, "Tệp này không có link http/https nào.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, L.T("Tệp này không có link http/https nào."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         return links;
     }
 
@@ -985,12 +985,12 @@ public sealed class MainForm : Form
     {
         var source = SourceUrl(item);
         using var dialog = new AddLinkForm(
-            "Làm mới link",
+            L.T("Làm mới link"),
             source is null
-                ? "Dán link mới của tệp này, DoMa sẽ tải tiếp phần còn lại."
-                : "Dán link mới, hoặc mở trang nguồn rồi bấm tải lại như thường. DoMa sẽ tải tiếp phần còn lại.",
-            "Tải tiếp",
-            source is null ? null : "Mở trang nguồn");
+                ? L.T("Dán link mới của tệp này, DoMa sẽ tải tiếp phần còn lại.")
+                : L.T("Dán link mới, hoặc mở trang nguồn rồi bấm tải lại như thường. DoMa sẽ tải tiếp phần còn lại."),
+            L.T("Tải tiếp"),
+            source is null ? null : L.T("Mở trang nguồn"));
         var answer = dialog.ShowDialog(this);
         if (answer == DialogResult.Retry)
         {
@@ -1003,13 +1003,13 @@ public sealed class MainForm : Form
         var text = dialog.Link;
         if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
         {
-            MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, L.T("Đường dẫn không hợp lệ."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         RunLogged(() =>
         {
             if (!_manager.ReplaceLink(item.Id, item.Request with { Url = uri.AbsoluteUri }))
-                MessageBox.Show(this, "Tệp này đang tải hoặc đã tải xong.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, L.T("Tệp này đang tải hoặc đã tải xong."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         });
     }
 
@@ -1030,7 +1030,7 @@ public sealed class MainForm : Form
         var ids = SelectedIds();
         if (ids.Count == 0)
             return;
-        var answer = MessageBox.Show(this, "Xoá luôn tệp trên ổ đĩa?", "Xoá", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        var answer = MessageBox.Show(this, L.T("Xoá luôn tệp trên ổ đĩa?"), L.T("Xoá"), MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
         if (answer == DialogResult.Cancel)
             return;
         RunLogged(() => _manager.Remove(ids, answer == DialogResult.Yes));
@@ -1070,7 +1070,7 @@ public sealed class MainForm : Form
         }
         catch (Win32Exception)
         {
-            MessageBox.Show("Không mở được trình duyệt.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(L.T("Không mở được trình duyệt."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -1149,17 +1149,17 @@ public sealed class MainForm : Form
             _grid.Invalidate();
         }
 
-        _viewTitle.Text = _nav.SelectedItem?.Text ?? "Tất cả";
-        _viewCount.Text = query.Length == 0 ? $"{next.Count} tệp" : $"{next.Count} tệp khớp “{query}”";
+        _viewTitle.Text = _nav.SelectedItem?.Text ?? L.T("Tất cả");
+        _viewCount.Text = query.Length == 0 ? L.F("{0} tệp", next.Count) : L.F("{0} tệp khớp “{1}”", next.Count, query);
 
         var downloading = items.Where(i => i.Status == DownloadStatus.Downloading).ToList();
         var totalSpeed = downloading.Sum(i => _manager.SpeedBytesPerSec(i.Id));
         var queued = items.Count(i => i.Status == DownloadStatus.Queued);
         _anyActive = downloading.Count > 0;
         _statusLeft = downloading.Count == 0
-            ? (queued > 0 ? $"Không có tệp đang tải · {queued} đang chờ" : "Sẵn sàng")
-            : $"{downloading.Count} tệp đang tải" + (totalSpeed > 0 ? $" · {DownloadView.FormatSpeed(totalSpeed)}" : "") + (queued > 0 ? $" · {queued} đang chờ" : "");
-        _statusRight = $"Tổng cộng {items.Count} tệp · {items.Count(i => i.Status == DownloadStatus.Completed)} đã xong";
+            ? (queued > 0 ? L.F("Không có tệp đang tải · {0} đang chờ", queued) : L.T("Sẵn sàng"))
+            : L.F("{0} tệp đang tải", downloading.Count) + (totalSpeed > 0 ? $" · {DownloadView.FormatSpeed(totalSpeed)}" : "") + (queued > 0 ? L.F(" · {0} đang chờ", queued) : "");
+        _statusRight = L.F("Tổng cộng {0} tệp · {1} đã xong", items.Count, items.Count(i => i.Status == DownloadStatus.Completed));
         if (QuickActions?.Describe() is { Length: > 0 } extra)
             _statusRight = extra + "   |   " + _statusRight;
         _statusBar.Invalidate();

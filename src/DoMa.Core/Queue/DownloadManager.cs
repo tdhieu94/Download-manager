@@ -7,7 +7,7 @@ namespace DoMa.Core.Queue;
 
 public class DownloadManager
 {
-    private const string NeedsRestartMessage = "Tệp trên máy chủ đã thay đổi — bấm Tải lại để tải từ đầu";
+    private static string NeedsRestartMessage => L.T("Tệp trên máy chủ đã thay đổi — bấm Tải lại để tải từ đầu");
     private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PersistInterval = TimeSpan.FromSeconds(5);
 
@@ -239,14 +239,14 @@ public class DownloadManager
         newName = newName.Trim();
         if (newName.Length == 0 || newName is "." or ".." || newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || newName.IndexOfAny(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) >= 0 || newName.EndsWith('.'))
-            return "Tên tệp không hợp lệ. Tên không được chứa các ký tự \\ / : * ? \" < > |";
+            return L.T("Tên tệp không hợp lệ. Tên không được chứa các ký tự \\ / : * ? \" < > |");
         lock (_gate)
         {
             var item = _items.FirstOrDefault(i => i.Id == id);
             if (item is null)
                 return null;
             if (_running.ContainsKey(id))
-                return "Hãy tạm dừng tệp trước khi đổi tên.";
+                return L.T("Hãy tạm dừng tệp trước khi đổi tên.");
             var oldPath = item.TargetPath;
             var newPath = Path.Combine(Path.GetDirectoryName(oldPath) ?? "", newName);
             if (newPath == oldPath)
@@ -254,7 +254,7 @@ public class DownloadManager
             var sameFile = string.Equals(newPath, oldPath, StringComparison.OrdinalIgnoreCase);
             if (!sameFile && (File.Exists(newPath) || Directory.Exists(newPath) || File.Exists(newPath + ".part")
                               || _items.Any(i => i.Id != id && string.Equals(i.TargetPath, newPath, StringComparison.OrdinalIgnoreCase))))
-                return $"Đã có tệp tên “{newName}” trong thư mục này.";
+                return L.F("Đã có tệp tên “{0}” trong thư mục này.", newName);
             try
             {
                 var source = item.Status == DownloadStatus.Completed ? oldPath : oldPath + ".part";
@@ -264,7 +264,7 @@ public class DownloadManager
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                return "Không đổi tên được: " + e.Message;
+                return L.T("Không đổi tên được: ") + e.Message;
             }
             var settings = _settings();
             item.TargetPath = newPath;
@@ -602,11 +602,11 @@ public class DownloadManager
 
     private static string ProbeMessage(ProbeResult probe) => probe.Failure switch
     {
-        ProbeFailure.Expired => "Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp",
-        ProbeFailure.NotFound => "Không tìm thấy tệp trên máy chủ",
-        ProbeFailure.HtmlInsteadOfFile => "Máy chủ trả về trang web thay vì tệp",
-        ProbeFailure.Network => "Không kết nối được tới máy chủ",
-        _ => probe.StatusCode is int code ? $"Máy chủ báo lỗi {code}" : "Máy chủ báo lỗi",
+        ProbeFailure.Expired => L.T("Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp"),
+        ProbeFailure.NotFound => L.T("Không tìm thấy tệp trên máy chủ"),
+        ProbeFailure.HtmlInsteadOfFile => L.T("Máy chủ trả về trang web thay vì tệp"),
+        ProbeFailure.Network => L.T("Không kết nối được tới máy chủ"),
+        _ => probe.StatusCode is int code ? L.F("Máy chủ báo lỗi {0}", code) : L.T("Máy chủ báo lỗi"),
     };
 
     private void Finish(Run run, EngineResult result)

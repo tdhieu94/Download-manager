@@ -240,11 +240,11 @@ public static class Theme
 
     public static string CategoryName(Category category) => category switch
     {
-        Category.Document => "Tài liệu",
-        Category.Software => "Phần mềm",
-        Category.Archive => "Nén",
-        Category.Media => "Video, nhạc",
-        _ => "Khác",
+        Category.Document => L.T("Tài liệu"),
+        Category.Software => L.T("Phần mềm"),
+        Category.Archive => L.T("Nén"),
+        Category.Media => L.T("Video, nhạc"),
+        _ => L.T("Khác"),
     };
 
     public static Color StatusColor(DownloadItem item)
