@@ -1,11 +1,21 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using DoMa.Core.Models;
 
 namespace DoMa.Core.Engine.YouTube;
 
-/// <summary>Thông tin video lấy từ yt-dlp: tiêu đề và dung lượng ước tính của bản sẽ tải.</summary>
-public sealed record YouTubeInfo(string Title, long? Size, bool IsLive);
+/// <summary>
+/// Thông tin video lấy từ yt-dlp: tiêu đề, dung lượng ước tính của bản tốt nhất,
+/// các độ phân giải có sẵn (cao xuống thấp), dung lượng bản chỉ có tiếng và có phụ đề hay không.
+/// </summary>
+public sealed record YouTubeInfo(string Title, long? Size, bool IsLive, IReadOnlyList<int>? Heights = null, long? AudioSize = null, bool HasSubtitles = false);
+
+/// <summary>Một video trong playlist/kênh.</summary>
+public sealed record PlaylistEntry(string Url, string Title);
+
+/// <summary>Danh sách video của playlist/kênh.</summary>
+public sealed record PlaylistInfo(string Title, IReadOnlyList<PlaylistEntry> Entries);
 
 /// <summary>Một dòng tiến độ yt-dlp in ra (theo mẫu <see cref="YtDlp.ProgressPrefix"/>).</summary>
 public sealed record YtDlpProgress(long Downloaded, long? Total);
@@ -37,10 +47,37 @@ public static class YtDlp
     ];
 
     /// <param name="outputStem">Đường dẫn tệp đích không có đuôi; yt-dlp tự thêm đuôi (.mp4).</param>
-    public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null) =>
+    public const int MaxPlaylistItems = 1000;
+
+    /// <summary>Danh sách video của playlist/kênh (không tải gì, chỉ đọc tên và link).</summary>
+    public static IReadOnlyList<string> PlaylistArguments(string url, string? cookieFile, string? denoPath = null) =>
+    [
+        "-J", "--flat-playlist", "--yes-playlist", "--no-warnings", "--encoding", "utf-8",
+        "--playlist-end", MaxPlaylistItems.ToString(CultureInfo.InvariantCulture),
+        .. Runtime(denoPath),
+        .. Cookies(cookieFile),
+        "--", url,
+    ];
+
+    /// <summary>Phụ đề tiếng Việt và tiếng Anh (cả phụ đề tự động), gắn vào tệp video.</summary>
+    public const string SubtitleLanguages = "vi,vi-VN,en,en-US,en-GB";
+
+    public static string[] FormatArguments(MediaOptions? options)
+    {
+        options ??= MediaOptions.Default;
+        if (options.AudioOnly)
+            return ["-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0"];
+        var sort = options.MaxHeight is { } h ? $"res:{h},fps,vcodec:h264,acodec:aac" : Sort;
+        string[] video = ["-f", Format, "-S", sort, "--merge-output-format", "mp4"];
+        return options.Subtitles
+            ? [.. video, "--write-subs", "--write-auto-subs", "--sub-langs", SubtitleLanguages, "--convert-subs", "srt", "--embed-subs"]
+            : video;
+    }
+
+    public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null, MediaOptions? options = null) =>
     [
         "--no-playlist", "--no-warnings", "--encoding", "utf-8", "--newline", "--progress", "--no-mtime",
-        "-f", Format, "-S", Sort, "--merge-output-format", "mp4",
+        .. FormatArguments(options),
         .. (ffmpegDir is null ? Array.Empty<string>() : ["--ffmpeg-location", ffmpegDir]),
         "-o", outputStem.Replace("%", "%%") + ".%(ext)s",
         "--progress-template", "download:" + ProgressPrefix + "%(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s",
@@ -94,7 +131,63 @@ public static class YtDlp
         }
         size ??= Size(root);
         var live = root.TryGetProperty("is_live", out var l) && l.ValueKind == JsonValueKind.True;
-        return new YouTubeInfo(title, size, live);
+        var heights = new SortedSet<int>(Comparer<int>.Create((a, b) => b.CompareTo(a)));
+        long? audio = null;
+        if (root.TryGetProperty("formats", out var all) && all.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var f in all.EnumerateArray())
+            {
+                var vcodec = Text(f, "vcodec");
+                var acodec = Text(f, "acodec");
+                if (vcodec is not null and not "none" && f.TryGetProperty("height", out var h) && h.ValueKind == JsonValueKind.Number && h.TryGetInt32(out var height) && height > 0)
+                    heights.Add(height);
+                if (vcodec == "none" && acodec is not null and not "none" && Size(f) is { } s && s > (audio ?? 0))
+                    audio = s;
+            }
+        }
+        var subs = HasLanguage(root, "subtitles") || HasLanguage(root, "automatic_captions");
+        return new YouTubeInfo(title, size, live, heights.Count > 0 ? [.. heights] : null, audio, subs);
+    }
+
+    private static string? Text(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static bool HasLanguage(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var subs) || subs.ValueKind != JsonValueKind.Object)
+            return false;
+        var wanted = SubtitleLanguages.Split(',');
+        return subs.EnumerateObject().Any(p => wanted.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Đọc kết quả <see cref="PlaylistArguments"/>: bỏ video riêng tư/đã xoá.</summary>
+    public static PlaylistInfo ParsePlaylist(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var title = Text(root, "title") ?? "Playlist";
+        var entries = new List<PlaylistEntry>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (root.TryGetProperty("entries", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var e in list.EnumerateArray())
+            {
+                if (e.ValueKind != JsonValueKind.Object)
+                    continue;
+                var name = Text(e, "title") ?? "";
+                if (name is "[Private video]" or "[Deleted video]")
+                    continue;
+                var url = Text(e, "url") ?? Text(e, "webpage_url");
+                if (url is null && Text(e, "id") is { Length: 11 } id)
+                    url = "https://www.youtube.com/watch?v=" + id;
+                if (url is null || !MediaLink.IsVideo(url))
+                    continue;
+                url = MediaLink.Normalize(url);
+                if (seen.Add(url))
+                    entries.Add(new PlaylistEntry(url, name.Length > 0 ? name : "Video " + (entries.Count + 1)));
+            }
+        }
+        return new PlaylistInfo(title, entries);
     }
 
     private static long? Size(JsonElement e)
@@ -126,11 +219,15 @@ public static class YtDlp
             return (WithRaw("YouTube không cho lấy video lúc này. DoMa sẽ cập nhật công cụ, hãy thử lại sau ít phút.", error), false);
         if (Has("Video unavailable") || Has("video is not available") || Has("content isn't available") || Has("not available in your country"))
             return (WithRaw("Video không còn hoặc bị chặn ở khu vực của bạn.", error), false);
+        if (Has("subtitle"))
+            return (WithRaw("Không tải được phụ đề. Hãy bỏ chọn “Tải kèm phụ đề” rồi tải lại.", error), false);
+        if (Has("login required") || Has("log in") || Has("cookies") && Has("authentication"))
+            return ("Trang yêu cầu đăng nhập để xem video này. Hãy đăng nhập trên trình duyệt rồi tải lại bằng DoMa.", false);
         if (Has("timed out") || Has("Unable to download") || Has("getaddrinfo") || Has("Connection") || Has("Network"))
             return ("Mất kết nối khi tải video YouTube.", true);
         if (Has("DRM"))
             return ("Video có bảo vệ bản quyền (DRM), không tải được.", false);
-        return (error.Length > 0 ? "YouTube: " + error : "Không tải được video YouTube.", false);
+        return (error.Length > 0 ? "yt-dlp: " + error : "Không tải được video.", false);
     }
 
     /// <summary>Kèm nguyên văn lỗi của yt-dlp (rút gọn) để dễ tìm nguyên nhân.</summary>

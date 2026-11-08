@@ -454,7 +454,7 @@ public class DownloadManager
     /// <summary>Video YouTube: yt-dlp để lại các tệp dở riêng cho hình và tiếng (vd. "Tên.f137.mp4.part").</summary>
     private static void DeleteStreamParts(DownloadItem item)
     {
-        if (!Engine.YouTube.YouTubeLink.IsVideo(item.Request.Url))
+        if (!Engine.YouTube.MediaLink.IsVideo(item.Request.Url))
             return;
         foreach (var path in Engine.YouTube.YouTubeDownloadEngine.PartialFiles(item.TargetPath))
             DeleteFile(path);

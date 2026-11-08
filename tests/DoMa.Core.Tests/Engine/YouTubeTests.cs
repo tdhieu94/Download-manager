@@ -72,7 +72,7 @@ public sealed class YouTubeTests : IDisposable
         Assert.Contains("bị chặn", YtDlp.DescribeError(["ERROR: [youtube] x: Video unavailable"]).Message);
         var net = YtDlp.DescribeError(["WARNING: retry", "ERROR: Unable to download webpage: timed out"]);
         Assert.True(net.Network);
-        Assert.Equal("Không tải được video YouTube.", YtDlp.DescribeError([]).Message);
+        Assert.Equal("Không tải được video.", YtDlp.DescribeError([]).Message);
     }
 
     [Fact]

@@ -21,7 +21,9 @@
 - **Bắt lượt tải từ trình duyệt.** Bấm tải trên Chrome hoặc Edge, DoMa nhận link ngay, kèm cookie, referer và user-agent, nên tải được cả link cần đăng nhập hoặc link có token hết hạn.
 - **Tải nhanh, nhiều kết nối.** Mỗi file được chia đoạn và tải song song (mặc định 16 kết nối, chỉnh được từ 1 đến 32).
 - **Tải tiếp khi bị ngắt.** Mất mạng, tắt app hay tắt máy đều tải tiếp được (khi máy chủ hỗ trợ `Range`).
-- **Bắt video trên trang và tải YouTube.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video YouTube được tải ở độ phân giải cao nhất mà video có (1080p, 2K, 4K…), ghép sẵn thành `.mp4`.
+- **Bắt video trên trang và tải YouTube, Facebook, TikTok, Instagram, X.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video từ các trang này được tải ở độ phân giải cao nhất mà video có (1080p, 2K, 4K…), ghép sẵn thành `.mp4`. Bạn có thể chọn độ phân giải thấp hơn, chỉ tải âm thanh thành `.mp3`, hoặc tải kèm phụ đề tiếng Việt/tiếng Anh.
+- **Tải cả playlist hoặc kênh YouTube.** Chuột phải trên trang playlist/kênh › "Tải cả playlist/kênh này bằng DoMa…", rồi tích chọn các video muốn tải.
+- **Tải nhiều link một lượt.** Dán nhiều link vào cửa sổ DoMa (Ctrl+V), kéo thả, hoặc nhập danh sách link từ tệp `.txt`.
 - **Tự phân loại.** File được xếp vào thư mục `TaiLieu`, `PhanMem`, `Nen`, `Video` hoặc `Khac` theo đuôi file. Bạn tự chỉnh danh sách đuôi được.
 - **Tải ngay hoặc Tải sau.** Mỗi lượt tải có hộp xác nhận để đổi tên hoặc nơi lưu, hoặc để dành vào hàng chờ.
 - **Chạy ngầm dưới khay hệ thống**, có thông báo khi tải xong hoặc lỗi, và có thể khởi động cùng Windows.
@@ -66,6 +68,6 @@ Bấm nút đóng cửa sổ chỉ ẩn DoMa xuống khay. Muốn thoát hẳn, 
 - Cookie của từng lượt tải được mã hoá bằng Windows DPAPI (chỉ tài khoản Windows của bạn giải mã được) và bị xoá khi tải xong.
 - Nhật ký lỗi tự lược bỏ phần query của URL (token, chữ ký…).
 - DoMa chỉ kết nối tới máy chủ của file bạn tải và tới `api.github.com` để kiểm tra bản cập nhật.
-- Tải YouTube dùng hai công cụ mã nguồn mở [yt-dlp](https://github.com/yt-dlp/yt-dlp) và [ffmpeg](https://ffmpeg.org). Chúng không có sẵn trong bộ cài: lần đầu bạn tải video YouTube, DoMa hỏi rồi mới tải chúng từ GitHub về `%LOCALAPPDATA%\DoMa\tools` (khoảng 120 MB). yt-dlp được tự cập nhật mỗi tuần.
-- Khi tải YouTube, cookie YouTube của trình duyệt được ghi tạm cho yt-dlp dùng và xoá ngay khi xong.
+- Tải video từ trang (YouTube, Facebook…) dùng các công cụ mã nguồn mở [yt-dlp](https://github.com/yt-dlp/yt-dlp), [deno](https://deno.com) và [ffmpeg](https://ffmpeg.org). Chúng không có sẵn trong bộ cài: lần đầu bạn tải video, DoMa hỏi rồi mới tải chúng từ GitHub về `%LOCALAPPDATA%\DoMa\tools` (khoảng 160 MB). yt-dlp được tự cập nhật mỗi tuần.
+- Khi tải video từ trang, cookie của trang đó trong trình duyệt được ghi tạm cho yt-dlp dùng và xoá ngay khi xong.
 - Hãy chỉ tải video bạn có quyền tải (video của bạn, video cho phép tải, dùng cá nhân theo luật nơi bạn sống).

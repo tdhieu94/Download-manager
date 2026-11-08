@@ -16,14 +16,14 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
     {
         if (!File.Exists(tools.YtDlpPath))
             return new EngineResult(EngineOutcome.Failed, null, NotReady);
-        var url = YouTubeLink.Normalize(job.Request.Url) ?? job.Request.Url;
+        var url = MediaLink.Normalize(job.Request.Url);
         var cookieFile = WriteCookies(job);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             var stem = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!, Path.GetFileNameWithoutExtension(job.TargetPath));
             var ffmpeg = File.Exists(tools.FfmpegPath) ? tools.Folder : null;
-            var args = YtDlp.DownloadArguments(url, stem, ffmpeg, cookieFile, Deno());
+            var args = YtDlp.DownloadArguments(url, stem, ffmpeg, cookieFile, Deno(), job.Request.Media);
             return await RunProcessAsync(args, job, progress, pauseToken);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
@@ -45,16 +45,50 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         }
     }
 
-    /// <summary>Lấy tiêu đề và dung lượng ước tính (chạy yt-dlp -J).</summary>
+    /// <summary>Lấy tiêu đề, dung lượng ước tính và các độ phân giải có sẵn (chạy yt-dlp -J).</summary>
     public async Task<(YouTubeInfo? Info, string? Error)> InfoAsync(DownloadRequest req, CancellationToken ct)
+    {
+        var (output, error) = await QueryAsync(req, (url, cookies) => YtDlp.InfoArguments(url, cookies, Deno()), ct);
+        if (output is null)
+            return (null, error);
+        try
+        {
+            var info = YtDlp.ParseInfo(output);
+            return info.IsLive ? (null, "Video đang phát trực tiếp, hãy tải sau khi phát xong.") : (info, null);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return (null, "Không đọc được thông tin video.");
+        }
+    }
+
+    /// <summary>Danh sách video của playlist hoặc kênh YouTube.</summary>
+    public async Task<(PlaylistInfo? Info, string? Error)> PlaylistAsync(DownloadRequest req, CancellationToken ct)
+    {
+        var (output, error) = await QueryAsync(req, (url, cookies) => YtDlp.PlaylistArguments(url, cookies, Deno()), ct);
+        if (output is null)
+            return (null, error);
+        try
+        {
+            var info = YtDlp.ParsePlaylist(output);
+            return info.Entries.Count == 0 ? (null, "Playlist không có video nào tải được.") : (info, null);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return (null, "Không đọc được danh sách video.");
+        }
+    }
+
+    /// <summary>Chạy yt-dlp lấy JSON; trả về nội dung in ra, hoặc câu báo lỗi.</summary>
+    private async Task<(string? Output, string? Error)> QueryAsync(DownloadRequest req, Func<string, string?, IReadOnlyList<string>> arguments, CancellationToken ct)
     {
         if (!File.Exists(tools.YtDlpPath))
             return (null, NotReady);
-        var url = YouTubeLink.Normalize(req.Url) ?? req.Url;
-        var cookieFile = WriteCookies(req.Cookies, Path.Combine(Path.GetTempPath(), $"doma-yt-{Guid.NewGuid():N}.txt"));
+        var url = MediaLink.Normalize(req.Url);
+        var cookieFile = WriteCookies(req.Cookies, url, Path.Combine(Path.GetTempPath(), $"doma-yt-{Guid.NewGuid():N}.txt"));
         try
         {
-            using var process = Start(YtDlp.InfoArguments(url, cookieFile, Deno()));
+            using var process = Start(arguments(url, cookieFile));
             var stdout = process.StandardOutput.ReadToEndAsync(ct);
             var stderr = process.StandardError.ReadToEndAsync(ct);
             using var reg = ct.Register(() => Kill(process));
@@ -63,12 +97,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             var errors = (await stderr).Split('\n', StringSplitOptions.TrimEntries);
             if (process.ExitCode != 0 || output.Trim().Length == 0)
                 return (null, YtDlp.DescribeError(errors).Message);
-            var info = YtDlp.ParseInfo(output);
-            return info.IsLive ? (null, "Video đang phát trực tiếp, hãy tải sau khi phát xong.") : (info, null);
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return (null, "Không đọc được thông tin video YouTube.");
+            return (output, null);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
         {
@@ -157,6 +186,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
                     return rest.EndsWith(".part", StringComparison.OrdinalIgnoreCase)
                         || rest.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase)
                         || rest.StartsWith(".temp.", StringComparison.OrdinalIgnoreCase)
+                        || System.Text.RegularExpressions.Regex.IsMatch(rest, @"^\.[a-z]{2}(-[a-z0-9]+)*\.(vtt|srt)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
                         || System.Text.RegularExpressions.Regex.IsMatch(rest, @"^\.f[0-9a-z-]+\.[a-z0-9]+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 })
                 .ToList();
@@ -199,14 +229,14 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
         }
     }
 
-    private static string? WriteCookies(DownloadJob job) => WriteCookies(job.Request.Cookies, job.StatePath + ".cookies.txt");
+    private static string? WriteCookies(DownloadJob job) => WriteCookies(job.Request.Cookies, job.Request.Url, job.StatePath + ".cookies.txt");
 
-    private static string? WriteCookies(string? cookies, string path)
+    private static string? WriteCookies(string? cookies, string url, string path)
     {
         if (string.IsNullOrWhiteSpace(cookies))
             return null;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, YtDlp.NetscapeCookies(cookies));
+        File.WriteAllText(path, YtDlp.NetscapeCookies(cookies, MediaLink.CookieDomain(url)));
         return path;
     }
 }

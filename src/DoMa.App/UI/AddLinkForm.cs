@@ -55,8 +55,13 @@ public sealed class AddLinkForm : Form
         {
             if (!Clipboard.ContainsText())
                 return null;
-            var text = Clipboard.GetText().Trim();
-            return Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? text : null;
+            // Copy nhiều link (mỗi dòng một link): gộp lại cách nhau bởi dấu cách vì ô nhập chỉ có một dòng.
+            var links = Clipboard.GetText().Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => Uri.TryCreate(t, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+                .Distinct()
+                .Take(Core.Files.BatchLinks.MaxLinks)
+                .ToList();
+            return links.Count > 0 ? string.Join(' ', links) : null;
         }
         catch (System.Runtime.InteropServices.ExternalException)
         {

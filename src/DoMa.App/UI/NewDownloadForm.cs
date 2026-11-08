@@ -24,10 +24,14 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     private readonly bool _warn;
     private readonly Panel _body;
     private RiskReport _risk = RiskReport.Safe;
+    private readonly MediaOptions _lastMedia;
+    private MediaChoice? _media;
+    private Core.Engine.YouTube.YouTubeInfo? _info;
 
-    public NewDownloadForm(bool warnAboutRisk = true)
+    public NewDownloadForm(bool warnAboutRisk = true, MediaOptions? lastMedia = null)
     {
         _warn = warnAboutRisk;
+        _lastMedia = lastMedia ?? MediaOptions.Default;
         Text = "Tải xuống mới";
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
@@ -75,7 +79,7 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
             Activate();
             _path.Box.Focus();
         };
-        FormClosed += (_, _) => _result.TrySetResult(new DialogResult(_choice, _path.Text.Trim()));
+        FormClosed += (_, _) => _result.TrySetResult(new DialogResult(_choice, _path.Text.Trim(), _media?.Options));
     }
 
     private int S(int v) => Theme.Scale(this, v);
@@ -120,6 +124,8 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
         _size = probe.Size ?? req.SizeHint;
         _path.Text = proposedPath;
         _fileName = Path.GetFileName(proposedPath);
+        if (probe.Media is { } info)
+            AddMediaRow(info);
         if (existing is not null)
             AddDuplicateBanner(existing);
         if (_warn)
@@ -135,6 +141,32 @@ public sealed class NewDownloadForm : Form, IDownloadDialog
     }
 
     private static string? FirstNonBlank(params string?[] values) => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    /// <summary>Video từ trang (YouTube, Facebook…): chọn chất lượng, chỉ âm thanh, phụ đề.</summary>
+    private void AddMediaRow(Core.Engine.YouTube.YouTubeInfo info)
+    {
+        _info = info;
+        _media = new MediaChoice(_lastMedia, info.Heights, info.HasSubtitles);
+        _media.SetBounds(S(24), S(184), _body.ClientSize.Width - S(48), S(36));
+        _body.Controls.Add(_media);
+        _bannerTop = S(232);
+        Height += S(46);
+        _media.Changed += (_, _) => ApplyMedia();
+        ApplyMedia();
+    }
+
+    private void ApplyMedia()
+    {
+        if (_media is null || _info is null)
+            return;
+        var options = _media.Options;
+        var path = _path.Text.Trim();
+        if (path.Length > 0 && !string.Equals(Path.GetExtension(path), options.Extension, StringComparison.OrdinalIgnoreCase))
+            _path.Text = Path.ChangeExtension(path, options.Extension);
+        _size = options.AudioOnly ? _info.AudioSize : options.MaxHeight is null ? _info.Size : null;
+        _sizeText = _size is null && !options.AudioOnly && options.MaxHeight is not null ? "Dung lượng tuỳ chất lượng" : SizeFormatter.Format(_size);
+        Invalidate(true);
+    }
 
     /// <summary>Khung cảnh báo dưới ô đường dẫn; cửa sổ cao thêm cho vừa.</summary>
     private void AddRiskBanner()

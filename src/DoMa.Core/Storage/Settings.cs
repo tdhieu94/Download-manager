@@ -28,6 +28,11 @@ public class Settings
     /// <summary>Tệp lỗi vì mất mạng được tự tải tiếp khi có mạng lại.</summary>
     public bool AutoResumeOnNetwork { get; set; } = true;
 
+    /// <summary>Chất lượng chọn lần trước khi tải video từ trang (YouTube, Facebook…): "best", "1080", "audio"…</summary>
+    public string MediaQuality { get; set; } = Models.MediaOptions.Best;
+
+    public bool MediaSubtitles { get; set; }
+
     /// <summary>Cảnh báo trong hộp "Tải xuống mới" khi tệp có dấu hiệu nguy hiểm.</summary>
     public bool WarnBeforeDownload { get; set; } = true;
 

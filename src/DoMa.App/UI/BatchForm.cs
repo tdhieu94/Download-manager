@@ -1,5 +1,6 @@
 using DoMa.App.UI.Controls;
 using DoMa.Core.Files;
+using DoMa.Core.Models;
 
 namespace DoMa.App.UI;
 
@@ -40,7 +41,10 @@ public sealed class BatchForm : Form
     private List<BatchLink> _visible = [];
     private bool _updating;
 
-    public BatchForm(IReadOnlyList<BatchLink> links, string source)
+    private readonly MediaChoice? _media;
+
+    /// <param name="media">Có video từ trang (YouTube…): hiện thêm dòng chọn chất lượng, mở sẵn lựa chọn lần trước.</param>
+    public BatchForm(IReadOnlyList<BatchLink> links, string source, MediaOptions? media = null, string? title = null, string? hint = null)
     {
         _links = [.. links];
         _checked = _links.Where(l => l.IsFile).Select(l => l.Url).ToHashSet();
@@ -112,9 +116,16 @@ public sealed class BatchForm : Form
 
         Controls.Add(body);
         Controls.Add(top);
+        if (media is not null)
+        {
+            var strip = new Panel { Dock = DockStyle.Bottom, Height = S(48), BackColor = Theme.Surface, Padding = new Padding(S(24), S(2), S(24), S(10)) };
+            _media = new MediaChoice(media, null) { Dock = DockStyle.Fill };
+            strip.Controls.Add(_media);
+            Controls.Add(strip);
+        }
         Controls.Add(DialogParts.Footer(this, _now, _later, _cancel));
-        Controls.Add(DialogParts.Header(this, IconKind.Link, Theme.Accent, "Tải nhiều link",
-            $"{_links.Count} link{(source.Length > 0 ? " từ " + source : "")}. Tích chọn các tệp muốn tải."));
+        Controls.Add(DialogParts.Header(this, IconKind.Link, Theme.Accent, title ?? "Tải nhiều link",
+            hint ?? $"{_links.Count} link{(source.Length > 0 ? " từ " + source : "")}. Tích chọn các tệp muốn tải."));
 
         _now.Click += (_, _) => Finish(true);
         _later.Click += (_, _) => Finish(false);
@@ -126,6 +137,9 @@ public sealed class BatchForm : Form
     public IReadOnlyList<BatchLink> Selected { get; private set; } = [];
 
     public bool StartNow { get; private set; }
+
+    /// <summary>Chất lượng chọn cho các video từ trang; null nếu hộp không có dòng chọn chất lượng.</summary>
+    public MediaOptions? Media => _media?.Options;
 
     private int S(int v) => Theme.Scale(this, v);
 

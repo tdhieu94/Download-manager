@@ -918,21 +918,57 @@ public sealed class MainForm : Form
 
     private async Task AddLinkAsync()
     {
-        var url = PromptLink();
-        if (url is not null)
-            await _addLink(url);
+        var links = PromptLinks();
+        if (links.Count > 0)
+            await AddLinksAsync(links);
     }
 
-    private string? PromptLink()
+    /// <summary>Hộp "Thêm link tải": một hoặc nhiều link (cách nhau bởi dấu cách), hoặc nhập từ tệp .txt.</summary>
+    private List<string> PromptLinks()
     {
-        using var dialog = new AddLinkForm();
-        if (dialog.ShowDialog(this) != DialogResult.OK)
-            return null;
-        var text = dialog.Link;
-        if (Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
-            return text;
-        MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        return null;
+        using var dialog = new AddLinkForm(
+            hint: "Dán một hoặc nhiều link http/https, cách nhau bởi dấu cách. Có thể nhập danh sách link từ tệp .txt.",
+            secondaryText: "Nhập từ tệp .txt…");
+        var answer = dialog.ShowDialog(this);
+        if (answer == DialogResult.Retry)
+            return ImportLinks();
+        if (answer != DialogResult.OK)
+            return [];
+        var links = ExtractLinks(dialog.Link);
+        if (links.Count == 0)
+            MessageBox.Show(this, "Đường dẫn không hợp lệ.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return links;
+    }
+
+    /// <summary>Đọc các link trong một tệp văn bản (mỗi dòng một link, hoặc lẫn trong đoạn văn).</summary>
+    private List<string> ImportLinks()
+    {
+        using var open = new OpenFileDialog
+        {
+            Title = "Chọn tệp chứa danh sách link",
+            Filter = "Tệp văn bản (*.txt)|*.txt|Mọi tệp (*.*)|*.*",
+        };
+        if (open.ShowDialog(this) != DialogResult.OK)
+            return [];
+        string text;
+        try
+        {
+            if (new FileInfo(open.FileName).Length > 10 * 1024 * 1024)
+            {
+                MessageBox.Show(this, "Tệp quá lớn (tối đa 10 MB).", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return [];
+            }
+            text = File.ReadAllText(open.FileName);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "Không đọc được tệp: " + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return [];
+        }
+        var links = ExtractLinks(text);
+        if (links.Count == 0)
+            MessageBox.Show(this, "Tệp này không có link http/https nào.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return links;
     }
 
     /// <summary>

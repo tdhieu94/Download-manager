@@ -28,7 +28,9 @@ function describe(entry) {
       return "";
     }
   })();
-  if (entry.kind === "youtube") return "YouTube · chất lượng cao nhất (tối đa 1080p)";
+  if (entry.kind === "youtube") return "YouTube · chọn chất lượng trong DoMa";
+  if (entry.kind === "page") return `${entry.site ?? "Video"} · chọn chất lượng trong DoMa`;
+  if (entry.kind === "playlist") return "Playlist YouTube · chọn video trong DoMa";
   const kind = entry.kind === "hls" ? "Luồng HLS" : entry.name.split(".").pop().toUpperCase();
   return [kind, formatSize(entry.size), host].filter(Boolean).join(" · ");
 }

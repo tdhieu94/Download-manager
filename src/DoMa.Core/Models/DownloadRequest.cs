@@ -7,4 +7,5 @@ public record DownloadRequest(
     string? Mime,
     long? SizeHint,
     string? Cookies,
-    string? UserAgent);
+    string? UserAgent,
+    MediaOptions? Media = null);

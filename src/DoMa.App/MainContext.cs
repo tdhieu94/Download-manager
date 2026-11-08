@@ -60,18 +60,19 @@ internal sealed class MainContext : ApplicationContext
                 new SegmentedDownloadEngine(_http) { Limiter = _limiter },
                 new Core.Engine.Hls.HlsDownloadEngine(_http) { Limiter = _limiter },
                 _ytEngine),
-            (req, ct) => Core.Engine.YouTube.YouTubeLink.IsVideo(req.Url) ? Task.FromResult(YouTubeReady(req)) : prober.ProbeAsync(req, ct),
+            (req, ct) => Core.Engine.YouTube.MediaLink.IsVideo(req.Url) ? Task.FromResult(MediaReady(req)) : prober.ProbeAsync(req, ct),
             new DownloadStore(AppPaths.DataDir),
             () => _settings,
             AppPaths.StatesDir,
             ui);
         _coordinator = new CaptureCoordinator(
-            (req, ct) => Core.Engine.YouTube.YouTubeLink.IsVideo(req.Url) ? ProbeYouTubeAsync(req, ct) : prober.ProbeAsync(req, ct),
-            new NewDownloadDialogHost(ui, () => _settings.WarnBeforeDownload),
+            (req, ct) => Core.Engine.YouTube.MediaLink.IsVideo(req.Url) ? ProbeMediaAsync(req, ct) : prober.ProbeAsync(req, ct),
+            new NewDownloadDialogHost(ui, () => _settings.WarnBeforeDownload, () => LastMedia, RememberMedia),
             _manager,
             () => new CategoryResolver(_settings.Extensions, _settings.RootFolder),
             Notify);
         _coordinator.TryRefresh = TryRefreshLink;
+        _coordinator.HandlePlaylist = AddPlaylistAsync;
 
         foreach (var item in _manager.Items)
             _lastStatus[item.Id] = item.Status;
@@ -131,26 +132,149 @@ internal sealed class MainContext : ApplicationContext
         }
     }
 
-    // ───────────── YouTube (qua yt-dlp) ─────────────
+    // ───────────── Video từ trang: YouTube, Facebook, TikTok… (qua yt-dlp) ─────────────
 
-    private static ProbeResult YouTubeReady(DownloadRequest req) =>
-        new(true, Core.Engine.YouTube.YouTubeLink.Normalize(req.Url), null, true, null, null, null, "video/mp4", ProbeFailure.None, 200);
+    private static ProbeResult MediaReady(DownloadRequest req) =>
+        new(true, Core.Engine.YouTube.MediaLink.Normalize(req.Url), null, true, null, null, null, "video/mp4", ProbeFailure.None, 200);
 
-    private static ProbeResult YouTubeFailed() => new(false, null, null, false, null, null, null, null, ProbeFailure.Other, null);
+    private static ProbeResult MediaFailed() => new(false, null, null, false, null, null, null, null, ProbeFailure.Other, null);
 
-    /// <summary>Link video YouTube vừa bắt: cài công cụ nếu cần (hỏi trước), rồi lấy tiêu đề và dung lượng để hiện hộp tải.</summary>
-    private async Task<ProbeResult> ProbeYouTubeAsync(DownloadRequest req, CancellationToken ct)
+    private MediaOptions LastMedia => new(_settings.MediaQuality, _settings.MediaSubtitles);
+
+    /// <summary>Nhớ chất lượng vừa chọn để lần sau chọn sẵn.</summary>
+    private void RememberMedia(MediaOptions options)
+    {
+        if (options == LastMedia)
+            return;
+        var updated = _settings.Clone();
+        updated.MediaQuality = options.Quality;
+        updated.MediaSubtitles = options.Subtitles;
+        try
+        {
+            _settingsStore.Save(updated);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("settings", e, null);
+        }
+        _settings = updated;
+    }
+
+    private static string SiteOf(string url) => Core.Engine.YouTube.MediaLink.SiteName(url) ?? "video";
+
+    /// <summary>Có công cụ yt-dlp chưa (hỏi rồi cài nếu thiếu), và cập nhật yt-dlp nếu đã lâu.</summary>
+    private async Task<bool> MediaToolsReadyAsync(CancellationToken ct)
     {
         if (!_ytTools.Ready && !await EnsureYouTubeToolsAsync())
-            return YouTubeFailed();
+            return false;
         await _ytTools.RefreshAsync(ct);
+        return true;
+    }
+
+    /// <summary>Link video vừa bắt: cài công cụ nếu cần (hỏi trước), rồi lấy tiêu đề, dung lượng, độ phân giải để hiện hộp tải.</summary>
+    private async Task<ProbeResult> ProbeMediaAsync(DownloadRequest req, CancellationToken ct)
+    {
+        if (!await MediaToolsReadyAsync(ct))
+            return MediaFailed();
         var (info, error) = await _ytEngine.InfoAsync(req, ct);
         if (info is null)
         {
-            _tray.Toast("Không tải được video YouTube", error ?? "", ToolTipIcon.Warning, null, 10);
-            return YouTubeFailed();
+            _tray.Toast($"Không tải được video {SiteOf(req.Url)}", error ?? "", ToolTipIcon.Warning, null, 10);
+            return MediaFailed();
         }
-        return YouTubeReady(req) with { Size = info.Size, FileName = info.Title + ".mp4" };
+        var options = LastMedia;
+        return MediaReady(req) with { Size = options.AudioOnly ? info.AudioSize : info.Size, FileName = info.Title + options.Extension, Media = info };
+    }
+
+    /// <summary>Link playlist hoặc kênh YouTube: đọc danh sách video, cho chọn video và chất lượng rồi thêm từng video.</summary>
+    private async Task<bool> AddPlaylistAsync(DownloadRequest req)
+    {
+        if (!await MediaToolsReadyAsync(CancellationToken.None))
+            return false;
+        _tray.Toast("Đang đọc playlist", "DoMa đang lấy danh sách video…", ToolTipIcon.None, null, 5);
+        var (playlist, error) = await _ytEngine.PlaylistAsync(req, CancellationToken.None);
+        if (playlist is null)
+        {
+            _tray.Toast("Không đọc được playlist", error ?? "", ToolTipIcon.Warning, null, 10);
+            return false;
+        }
+        var chosen = new TaskCompletionSource<(IReadOnlyList<BatchLink> Links, MediaOptions Media, bool StartNow)?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        PostToForm(() =>
+        {
+            try
+            {
+                var links = playlist.Entries
+                    .Select(e => new BatchLink(e.Url, FileNameResolver.Sanitize(e.Title), LinkKind.Media, "youtube.com"))
+                    .ToList();
+                var more = playlist.Entries.Count >= Core.Engine.YouTube.YtDlp.MaxPlaylistItems ? $" (DoMa lấy tối đa {Core.Engine.YouTube.YtDlp.MaxPlaylistItems} video)" : "";
+                using var dialog = new UI.BatchForm(links, "", LastMedia, playlist.Title,
+                    $"{links.Count} video{more}. Tích chọn các video muốn tải.");
+                chosen.TrySetResult(dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK
+                    ? (dialog.Selected, dialog.Media ?? LastMedia, dialog.StartNow)
+                    : null);
+            }
+            catch (Exception e)
+            {
+                chosen.TrySetException(e);
+            }
+        });
+        if (await chosen.Task is not { } pick)
+            return false;
+        RememberMedia(pick.Media);
+        var added = AddMedia(pick.Links.Select(l => (l.Url, (string?)l.FileName)), pick.Media, pick.StartNow, req.Cookies, req.UserAgent);
+        if (added > 0)
+            _tray.Toast("Đã thêm playlist", $"{added} video · {playlist.Title}", ToolTipIcon.Info, ShowNow);
+        return added > 0;
+    }
+
+    /// <summary>Thêm các video từ trang vào danh sách, lưu vào thư mục Video với tên theo tiêu đề.</summary>
+    private int AddMedia(IEnumerable<(string Url, string? Title)> videos, MediaOptions options, bool startNow, string? cookies, string? userAgent)
+    {
+        var resolver = new CategoryResolver(_settings.Extensions, _settings.RootFolder);
+        var folder = resolver.FolderFor(Category.Media);
+        var added = 0;
+        foreach (var (url, title) in videos)
+        {
+            var name = FileNameResolver.Sanitize(title ?? "");
+            if (name.Length == 0)
+                name = "Video " + SiteOf(url);
+            var taken = _manager.Items.Select(i => i.TargetPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var path = FileNameResolver.MakeUnique(Path.Combine(folder, name + options.Extension), p => File.Exists(p) || taken.Contains(p));
+            try
+            {
+                _manager.Add(new DownloadRequest(Core.Engine.YouTube.MediaLink.Normalize(url), null, null, null, null, cookies, userAgent, options), path, startNow);
+                added++;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                _log.Write("media", e, null);
+            }
+        }
+        return added;
+    }
+
+    /// <summary>Trang video dán/chọn trong hộp "Tải nhiều link": lấy tiêu đề từng video rồi mới thêm (chạy nền).</summary>
+    private async Task AddMediaPagesAsync(IReadOnlyList<BatchLink> links, MediaOptions options, bool startNow,
+        IReadOnlyDictionary<string, string>? cookiesByHost, string? userAgent)
+    {
+        if (!await MediaToolsReadyAsync(CancellationToken.None))
+            return;
+        if (links.Count > 1)
+            _tray.Toast("Đang lấy thông tin video", $"{links.Count} video · DoMa sẽ thêm vào danh sách khi xong", ToolTipIcon.None, null, 5);
+        var added = 0;
+        foreach (var link in links)
+        {
+            var cookies = cookiesByHost is not null && cookiesByHost.TryGetValue(link.Host, out var c) ? c : null;
+            var req = new DownloadRequest(link.Url, null, null, null, null, cookies, userAgent);
+            var (info, _) = await _ytEngine.InfoAsync(req, CancellationToken.None);
+            var title = info?.Title ?? link.FileName;
+            PostToForm(() => added += AddMedia([(link.Url, title)], options, startNow, cookies, userAgent));
+        }
+        PostToForm(() =>
+        {
+            if (added > 0 && links.Count > 1)
+                _tray.Toast("Đã thêm video", $"{added} video vào danh sách", ToolTipIcon.Info, ShowNow);
+        });
     }
 
     /// <summary>Lần đầu tải YouTube: hỏi rồi tải yt-dlp và ffmpeg (chỉ một lần, các lượt bắt cùng lúc dùng chung).</summary>
@@ -170,15 +294,15 @@ internal sealed class MainContext : ApplicationContext
         var missing = _ytTools.Missing;
         var lines = string.Join("\n", missing.Select(m => $"• {m.Name} (khoảng {m.SizeMb} MB): " + m.Name switch
         {
-            "yt-dlp" => "đọc trang video YouTube",
+            "yt-dlp" => "đọc trang video YouTube, Facebook, TikTok…",
             "deno" => "chạy JavaScript, yt-dlp cần để lấy link video YouTube",
-            _ => "ghép hình và tiếng thành một tệp .mp4",
+            _ => "ghép hình và tiếng thành một tệp .mp4, đổi sang MP3",
         }));
         _ui.Post(_ =>
         {
-            var text = "Để tải video YouTube, DoMa cần thêm công cụ miễn phí, mã nguồn mở:\n\n"
+            var text = "Để tải video từ YouTube, Facebook, TikTok…, DoMa cần thêm công cụ miễn phí, mã nguồn mở:\n\n"
                 + lines + "\n\nDoMa sẽ tải chúng từ GitHub một lần duy nhất. Tải ngay?";
-            const string caption = "Tải video YouTube";
+            const string caption = "Tải video từ trang web";
             // Cửa sổ DoMa đang ẩn dưới khay: hiện hộp hỏi nổi lên trên trình duyệt.
             var answer = _form.Visible
                 ? MessageBox.Show(_form, text, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question)
@@ -188,20 +312,20 @@ internal sealed class MainContext : ApplicationContext
         }, null);
         if (!await asked.Task)
             return false;
-        _tray.Toast("Đang chuẩn bị tải YouTube", $"Đang tải {string.Join(", ", missing.Select(m => m.Name))} (một lần duy nhất, có thể mất vài phút)…", ToolTipIcon.None, null, 10);
+        _tray.Toast("Đang chuẩn bị tải video", $"Đang tải {string.Join(", ", missing.Select(m => m.Name))} (một lần duy nhất, có thể mất vài phút)…", ToolTipIcon.None, null, 10);
         try
         {
             _ytInstallPercent = 0;
             await _ytTools.InstallAsync(new Progress<int>(p => _ytInstallPercent = p), CancellationToken.None);
             _ytInstallPercent = -1;
-            _tray.Toast("Đã sẵn sàng tải YouTube", "Đang lấy thông tin video…", ToolTipIcon.Info, null);
+            _tray.Toast("Đã sẵn sàng tải video", "Đang lấy thông tin video…", ToolTipIcon.Info, null);
             return true;
         }
         catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or TaskCanceledException)
         {
             _log.Write("youtube-tools", e, null);
             _ytInstallPercent = -1;
-            _tray.Toast("Không tải được công cụ YouTube", $"Kiểm tra kết nối mạng rồi thử lại. ({e.Message})", ToolTipIcon.Error, null, 10);
+            _tray.Toast("Không tải được công cụ tải video", $"Kiểm tra kết nối mạng rồi thử lại. ({e.Message})", ToolTipIcon.Error, null, 10);
             return false;
         }
     }
@@ -211,7 +335,7 @@ internal sealed class MainContext : ApplicationContext
     {
         if (_refresh.Match(_manager.Items, fileName, probe.Size) is not { } item)
             return false;
-        if (!_manager.ReplaceLink(item.Id, req))
+        if (!_manager.ReplaceLink(item.Id, req with { Media = item.Request.Media }))
             return false;
         _refresh.Disarm(item.Id);
         _tray.Toast("Đã làm mới link", $"{Path.GetFileName(item.TargetPath)} · đang tải tiếp phần còn lại", ToolTipIcon.Info, ShowNow);
@@ -290,11 +414,18 @@ internal sealed class MainContext : ApplicationContext
             _tray.Toast("Không có link nào để tải", source.Length > 0 ? $"Trang {source} không có link tải được." : "Không tìm thấy link http/https.", ToolTipIcon.Warning, null);
             return false;
         }
-        using var dialog = new UI.BatchForm(links, source);
+        using var dialog = new UI.BatchForm(links, source, links.Any(l => l.IsMediaPage) ? LastMedia : null);
         if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
             return false;
         var referer = Uri.TryCreate(referrer, UriKind.Absolute, out var r) && r.Scheme is "http" or "https" ? referrer : null;
-        foreach (var link in dialog.Selected)
+        var pages = dialog.Selected.Where(l => l.IsMediaPage).ToList();
+        if (pages.Count > 0)
+        {
+            var media = dialog.Media ?? LastMedia;
+            RememberMedia(media);
+            _ = AddMediaPagesAsync(pages, media, dialog.StartNow, cookiesByHost, userAgent);
+        }
+        foreach (var link in dialog.Selected.Where(l => !l.IsMediaPage))
         {
             var cookies = cookiesByHost is not null && cookiesByHost.TryGetValue(link.Host, out var c) ? c : null;
             var request = new DownloadRequest(link.Url, referer, link.FileName, null, null, cookies, userAgent);

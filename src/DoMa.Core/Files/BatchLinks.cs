@@ -7,8 +7,11 @@ public enum LinkKind { Document, Software, Archive, Media, Other }
 
 public sealed record BatchLink(string Url, string FileName, LinkKind Kind, string Host)
 {
-    /// <summary>Link trỏ tới một tệp (có đuôi tệp đã biết), không phải trang web thường.</summary>
+    /// <summary>Link trỏ tới một tệp (có đuôi tệp đã biết) hoặc trang video tải được, không phải trang web thường.</summary>
     public bool IsFile => Kind != LinkKind.Other;
+
+    /// <summary>Trang video (YouTube, Facebook…) tải bằng yt-dlp.</summary>
+    public bool IsMediaPage => Engine.YouTube.MediaLink.IsVideo(Url);
 }
 
 public static class BatchLinks
@@ -35,7 +38,13 @@ public static class BatchLinks
             var name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath.TrimEnd('/')));
             var ext = Path.GetExtension(name).TrimStart('.');
             var kind = KindOf(ext, resolver, name);
-            if (name.Length == 0 || ext.Length == 0)
+            if (Engine.YouTube.MediaLink.IsVideo(url))
+            {
+                // Trang video (YouTube, TikTok…): tên thật lấy từ tiêu đề video lúc thêm vào danh sách.
+                kind = LinkKind.Media;
+                name = string.IsNullOrWhiteSpace(text) ? $"Video {Engine.YouTube.MediaLink.SiteName(url)}" : text.Trim();
+            }
+            else if (name.Length == 0 || ext.Length == 0)
                 name = string.IsNullOrWhiteSpace(text) ? (name.Length > 0 ? name : uri.Host) : text.Trim();
             result.Add(new BatchLink(url, FileNameResolver.Sanitize(name), kind, uri.Host));
         }

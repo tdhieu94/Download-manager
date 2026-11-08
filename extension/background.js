@@ -2,7 +2,7 @@ import {
   shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, shouldReload,
   manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply,
   collectPageLinks, prepareBatch, hostsOf, toBatchMessage,
-  classifyMedia, totalFromHeaders, mediaFileName, addMedia, youtubeVideoUrl, youtubeEntry,
+  classifyMedia, totalFromHeaders, mediaFileName, addMedia, pageVideo, youtubePlaylistUrl, isPageMedia, pageEntries,
 } from "./capture.js";
 
 const HOST_NAME = "com.doma.host";
@@ -238,6 +238,10 @@ chrome.downloads.onCreated.addListener(async (item) => {
 const MENU_ID = "doma-download";
 const MENU_ALL_ID = "doma-download-all";
 const MENU_YT_ID = "doma-download-youtube";
+const MENU_PL_ID = "doma-download-playlist";
+// Trang video tải được bằng DoMa (qua yt-dlp).
+const VIDEO_SITES = ["*://*.youtube.com/*", "*://*.facebook.com/*", "*://fb.watch/*", "*://*.tiktok.com/*",
+  "*://*.instagram.com/*", "*://*.x.com/*", "*://x.com/*", "*://*.twitter.com/*", "*://twitter.com/*"];
 
 function createMenu() {
   chrome.contextMenus.removeAll(() => {
@@ -248,8 +252,14 @@ function createMenu() {
     });
     chrome.contextMenus.create({
       id: MENU_YT_ID,
-      title: "Tải video YouTube này bằng DoMa",
+      title: "Tải video này bằng DoMa",
       contexts: ["page", "video"],
+      documentUrlPatterns: VIDEO_SITES,
+    });
+    chrome.contextMenus.create({
+      id: MENU_PL_ID,
+      title: "Tải cả playlist/kênh này bằng DoMa…",
+      contexts: ["page"],
       documentUrlPatterns: ["*://*.youtube.com/*"],
     });
     chrome.contextMenus.create({
@@ -276,8 +286,8 @@ async function captureManual(url, pageUrl) {
       return;
     }
     const cookies = await buildCookies(url);
-    // Link trang YouTube: trình duyệt không tải thay được (chỉ ra trang web), nên không có đường lui.
-    manual.set(id, youtubeVideoUrl(url) ? null : url);
+    // Link trang video (YouTube, TikTok…): trình duyệt không tải thay được (chỉ ra trang web), nên không có đường lui.
+    manual.set(id, isPageMedia(url) ? null : url);
     pending.add(id);
     try {
       activePort.postMessage(toManualCaptureMessage(id, url, pageUrl, cookies, navigator.userAgent));
@@ -371,14 +381,14 @@ chrome.webRequest.onHeadersReceived.addListener(
 );
 
 // Sang trang khác hoặc đóng tab: xoá danh sách video của tab đó.
-// Trang video YouTube: hiện sẵn video đó trong danh sách (DoMa tải bằng yt-dlp).
+// Trang video (YouTube, Facebook, TikTok…) hoặc playlist YouTube: hiện sẵn trong danh sách (DoMa tải bằng yt-dlp).
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!changeInfo.url && !changeInfo.title) return;
   (async () => {
     const list = changeInfo.url ? [] : await mediaOf(tabId);
-    const yt = youtubeEntry(tab?.url ?? changeInfo.url, tab?.title);
-    const rest = list.filter((m) => m.kind !== "youtube");
-    if (yt) await setMedia(tabId, addMedia(rest, yt));
+    const pages = pageEntries(tab?.url ?? changeInfo.url, tab?.title);
+    const rest = list.filter((m) => m.kind !== "page" && m.kind !== "playlist" && m.kind !== "youtube");
+    if (pages.length > 0) await setMedia(tabId, [...pages].reverse().reduce((acc, e) => addMedia(acc, e), rest));
     else if (changeInfo.url) await setMedia(tabId, []);
   })().catch(() => {});
 });
@@ -417,7 +427,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     return;
   }
   if (info.menuItemId === MENU_YT_ID) {
-    const url = youtubeVideoUrl(info.pageUrl || tab?.url);
+    const url = pageVideo(info.pageUrl || tab?.url)?.url;
+    if (url) captureManual(url, url);
+    return;
+  }
+  if (info.menuItemId === MENU_PL_ID) {
+    const url = youtubePlaylistUrl(info.pageUrl || tab?.url);
     if (url) captureManual(url, url);
     return;
   }

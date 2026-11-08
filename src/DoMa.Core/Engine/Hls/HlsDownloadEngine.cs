@@ -272,7 +272,7 @@ public sealed class MediaAwareEngine(IDownloadEngine files, IDownloadEngine hls,
 {
     public Task<EngineResult> RunAsync(DownloadJob job, IProgress<EngineProgress> progress, CancellationToken pauseToken)
     {
-        if (youtube is not null && YouTube.YouTubeLink.IsVideo(job.Request.Url))
+        if (youtube is not null && YouTube.MediaLink.IsVideo(job.Request.Url))
             return youtube.RunAsync(job, progress, pauseToken);
         return HlsPlaylist.Looks(job.Probe.FinalUrl ?? job.Request.Url, job.Probe.ContentType ?? job.Request.Mime)
             ? hls.RunAsync(job, progress, pauseToken)
@@ -281,5 +281,5 @@ public sealed class MediaAwareEngine(IDownloadEngine files, IDownloadEngine hls,
 
     /// <summary>Video dạng luồng (HLS, YouTube): chưa biết chính xác dung lượng, tải tiếp được theo cách riêng.</summary>
     public static bool IsStream(string url, string? contentType) =>
-        YouTube.YouTubeLink.IsVideo(url) || HlsPlaylist.Looks(url, contentType);
+        YouTube.MediaLink.IsVideo(url) || HlsPlaylist.Looks(url, contentType);
 }

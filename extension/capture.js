@@ -240,12 +240,78 @@ export function youtubeVideoUrl(url) {
   return id && YT_ID.test(id) ? `https://www.youtube.com/watch?v=${id}` : null;
 }
 
-/** Mục "video YouTube" cho danh sách trong cửa sổ tiện ích. */
-export function youtubeEntry(pageUrl, title) {
-  const url = youtubeVideoUrl(pageUrl);
-  if (!url) return null;
-  const clean = String(title ?? "").replace(/\s*-\s*YouTube\s*$/i, "").replace(/^\(\d+\)\s*/, "");
-  return { url, kind: "youtube", mime: null, size: null, name: mediaFileName(clean || "YouTube", url, { kind: "file", ext: "mp4" }), pageUrl: url, at: Date.now() };
+function parseUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+const bareHost = (u) => u.hostname.toLowerCase().replace(/^(www\.|m\.|web\.|mobile\.)/, "");
+
+/** Playlist hoặc kênh YouTube (cả link xem video có "&list="), dạng chuẩn; null nếu không phải. Bỏ "Mix" (list=RD…) vì không có hồi kết. */
+export function youtubePlaylistUrl(url) {
+  const u = parseUrl(url);
+  if (!u || !["youtube.com", "music.youtube.com"].includes(bareHost(u))) return null;
+  const list = u.searchParams.get("list");
+  if (u.pathname.replace(/\/$/, "") === "/playlist" || (u.pathname === "/watch" && list)) {
+    return list && !list.startsWith("RD") ? `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}` : null;
+  }
+  const parts = u.pathname.split("/").filter(Boolean);
+  let channel = null;
+  if (parts[0]?.startsWith("@") && parts[0].length > 1) channel = parts[0];
+  else if (["channel", "c", "user"].includes(parts[0]) && parts[1]) channel = `${parts[0]}/${parts[1]}`;
+  if (!channel) return null;
+  const rest = parts[channel.includes("/") ? 2 : 1];
+  const tab = ["videos", "shorts", "streams"].includes(rest) ? rest : rest == null || rest === "featured" ? "videos" : null;
+  return tab ? `https://www.youtube.com/${channel}/${tab}` : null;
+}
+
+/** Trang một video tải được bằng DoMa (YouTube, Facebook, TikTok, Instagram, X): { url, site }; null nếu không phải. */
+export function pageVideo(url) {
+  const yt = youtubeVideoUrl(url);
+  if (yt) return { url: yt, site: "YouTube" };
+  const u = parseUrl(url);
+  if (!u) return null;
+  const host = bareHost(u);
+  const parts = u.pathname.split("/").filter(Boolean);
+  let site = null;
+  if (host === "fb.watch" && parts.length > 0) site = "Facebook";
+  else if (host === "facebook.com") {
+    if ((u.pathname.replace(/\/$/, "") === "/watch" && u.searchParams.get("v")) || (parts[0] === "reel" && parts[1])
+      || (parts[0] === "share" && ["v", "r"].includes(parts[1]) && parts[2]) || (parts[1] === "videos" && parts[2])) site = "Facebook";
+  } else if (host === "tiktok.com") {
+    if ((parts[0]?.startsWith("@") && parts[1] === "video" && parts[2]) || (parts[0] === "t" && parts[1])) site = "TikTok";
+  } else if ((host === "vm.tiktok.com" || host === "vt.tiktok.com") && parts.length > 0) site = "TikTok";
+  else if (host === "instagram.com" && ["reel", "reels", "p", "tv"].includes(parts[0]) && parts[1]) site = "Instagram";
+  else if ((host === "x.com" || host === "twitter.com") && parts[1] === "status" && /^\d+$/.test(parts[2] ?? "")) site = "X";
+  if (!site) return null;
+  u.hash = "";
+  return { url: u.href, site };
+}
+
+/** Link trang (video hoặc playlist) mà DoMa tải bằng yt-dlp; trình duyệt không tự tải thay được. */
+export const isPageMedia = (url) => pageVideo(url) != null || youtubePlaylistUrl(url) != null;
+
+const SITE_SUFFIX = /\s*[-|–]\s*(YouTube|Facebook|TikTok|Instagram|X)\s*$/i;
+
+/** Mục cho danh sách trong cửa sổ tiện ích: video của trang, và cả playlist nếu trang thuộc một playlist/kênh YouTube. */
+export function pageEntries(pageUrl, title) {
+  const clean = String(title ?? "").replace(SITE_SUFFIX, "").replace(/^\(\d+\)\s*/, "").trim();
+  const entries = [];
+  const video = pageVideo(pageUrl);
+  if (video) {
+    entries.push({ url: video.url, kind: "page", site: video.site, mime: null, size: null,
+      name: mediaFileName(clean || video.site, video.url, { kind: "file", ext: "mp4" }), pageUrl: video.url, at: Date.now() });
+  }
+  const playlist = youtubePlaylistUrl(pageUrl);
+  if (playlist) {
+    entries.push({ url: playlist, kind: "playlist", site: "YouTube", mime: null, size: null,
+      name: video ? "Cả playlist chứa video này" : clean || "Playlist YouTube", pageUrl: playlist, at: Date.now() });
+  }
+  return entries;
 }
 
 /** Thêm vào danh sách media của một tab: bỏ trùng theo link, giữ tối đa MAX_MEDIA_PER_TAB mục mới nhất. */

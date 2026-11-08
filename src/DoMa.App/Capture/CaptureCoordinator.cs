@@ -9,7 +9,8 @@ namespace DoMa.App.Capture;
 
 public enum DialogChoice { DownloadNow, Later, Cancel }
 
-public record DialogResult(DialogChoice Choice, string TargetPath);
+/// <param name="Media">Lựa chọn chất lượng/phụ đề khi tải video từ trang; null với tệp thường.</param>
+public record DialogResult(DialogChoice Choice, string TargetPath, MediaOptions? Media = null);
 
 public interface IDownloadDialog
 {
@@ -35,6 +36,9 @@ public class CaptureCoordinator(
     /// </summary>
     public Func<DownloadRequest, ProbeResult, string, bool>? TryRefresh { get; set; }
 
+    /// <summary>Link playlist/kênh: tự lo việc hỏi và thêm từng video; trả true nếu đã thêm ít nhất một video.</summary>
+    public Func<DownloadRequest, Task<bool>>? HandlePlaylist { get; set; }
+
     public async Task HandleAsync(JsonNode msg, Func<JsonNode, Task<bool>> reply, Func<bool> isConnected)
     {
         CaptureMessage capture;
@@ -51,6 +55,22 @@ public class CaptureCoordinator(
         }
 
         var req = capture.ToRequest();
+        if (HandlePlaylist is { } playlist && Core.Engine.YouTube.MediaLink.IsPlaylist(req.Url))
+        {
+            bool added;
+            try
+            {
+                await reply(Messages.Reply(MessageTypes.Asking, capture.Id));
+                added = await playlist(req);
+            }
+            catch (Exception)
+            {
+                await TryReply(reply, Messages.Reply(MessageTypes.GiveBack, capture.Id));
+                return;
+            }
+            await TryReply(reply, Messages.Reply(added ? MessageTypes.Accepted : MessageTypes.Cancelled, capture.Id));
+            return;
+        }
         ProbeResult result;
         try
         {
@@ -97,7 +117,7 @@ public class CaptureCoordinator(
                 notify(BrowserTookOverMessage);
                 return;
             }
-            var item = manager.Add(req, choice.TargetPath, choice.Choice == DialogChoice.DownloadNow);
+            var item = manager.Add(choice.Media is null ? req : req with { Media = choice.Media }, choice.TargetPath, choice.Choice == DialogChoice.DownloadNow);
             if (await TryReply(reply, Messages.Reply(MessageTypes.Accepted, capture.Id)))
                 return;
             manager.Remove([item.Id], true);

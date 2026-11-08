@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage, classifyMedia, totalFromHeaders, mediaFileName, addMedia, MAX_MEDIA_PER_TAB, youtubeVideoUrl, youtubeEntry } from "../capture.js";
+import { shouldCapture, PendingTable, toCaptureMessage, resumeStored, decideReply, afterPause, compareVersions, shouldReload, manualId, isManualId, contextUrl, toManualCaptureMessage, decideManualReply, prepareBatch, hostsOf, toBatchMessage, classifyMedia, totalFromHeaders, mediaFileName, addMedia, MAX_MEDIA_PER_TAB, youtubeVideoUrl, pageEntries, pageVideo, youtubePlaylistUrl, isPageMedia } from "../capture.js";
 
 const base = { id: 1, url: "https://example.com/a.zip", state: "in_progress", incognito: false };
 const on = { enabled: true };
@@ -278,9 +278,42 @@ test("recognises YouTube video pages and normalises the link", () => {
 });
 
 test("YouTube entry takes the video title", () => {
-  const e = youtubeEntry("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "(3) Bài hát: Hay - YouTube");
-  assert.equal(e.kind, "youtube");
+  const [e] = pageEntries("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "(3) Bài hát: Hay - YouTube");
+  assert.equal(e.kind, "page");
+  assert.equal(e.site, "YouTube");
   assert.equal(e.url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   assert.equal(e.name, "Bài hát Hay.mp4");
-  assert.equal(youtubeEntry("https://www.youtube.com/feed", "YouTube"), null);
+  assert.deepEqual(pageEntries("https://www.youtube.com/feed", "YouTube"), []);
+});
+
+test("video in a playlist also offers the whole playlist, but not a Mix", () => {
+  const entries = pageEntries("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc", "Hay - YouTube");
+  assert.deepEqual(entries.map((e) => e.kind), ["page", "playlist"]);
+  assert.equal(entries[1].url, "https://www.youtube.com/playlist?list=PLabc");
+  assert.equal(pageEntries("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ", "x").length, 1);
+});
+
+test("playlist and channel links", () => {
+  assert.equal(youtubePlaylistUrl("https://www.youtube.com/playlist?list=PL1"), "https://www.youtube.com/playlist?list=PL1");
+  assert.equal(youtubePlaylistUrl("https://www.youtube.com/@kenh"), "https://www.youtube.com/@kenh/videos");
+  assert.equal(youtubePlaylistUrl("https://www.youtube.com/@kenh/shorts"), "https://www.youtube.com/@kenh/shorts");
+  assert.equal(youtubePlaylistUrl("https://www.youtube.com/channel/UC123"), "https://www.youtube.com/channel/UC123/videos");
+  assert.equal(youtubePlaylistUrl("https://www.youtube.com/@kenh/about"), null);
+  assert.equal(youtubePlaylistUrl("https://www.youtube.com/feed/history"), null);
+});
+
+test("video pages on other sites", () => {
+  assert.equal(pageVideo("https://www.facebook.com/watch?v=123")?.site, "Facebook");
+  assert.equal(pageVideo("https://www.facebook.com/reel/123")?.site, "Facebook");
+  assert.equal(pageVideo("https://fb.watch/abc/")?.site, "Facebook");
+  assert.equal(pageVideo("https://www.tiktok.com/@ai/video/7234#x")?.url, "https://www.tiktok.com/@ai/video/7234");
+  assert.equal(pageVideo("https://vm.tiktok.com/ZM123/")?.site, "TikTok");
+  assert.equal(pageVideo("https://www.instagram.com/reel/Cabc/")?.site, "Instagram");
+  assert.equal(pageVideo("https://x.com/user/status/1234567")?.site, "X");
+  assert.equal(pageVideo("https://twitter.com/user/status/1234567")?.site, "X");
+  assert.equal(pageVideo("https://www.facebook.com/profile.php"), null);
+  assert.equal(pageVideo("https://x.com/user"), null);
+  assert.equal(pageVideo("https://www.instagram.com/user/"), null);
+  assert.equal(isPageMedia("https://www.youtube.com/@kenh"), true);
+  assert.equal(isPageMedia("https://example.com/a.zip"), false);
 });

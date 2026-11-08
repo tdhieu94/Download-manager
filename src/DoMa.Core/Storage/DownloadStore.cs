@@ -4,7 +4,7 @@ namespace DoMa.Core.Storage;
 
 public class DownloadStore(string dataDir)
 {
-    record StoredRequest(string Url, string? Referrer, string? SuggestedFileName, string? Mime, long? SizeHint, string? ProtectedCookies, string? UserAgent);
+    record StoredRequest(string Url, string? Referrer, string? SuggestedFileName, string? Mime, long? SizeHint, string? ProtectedCookies, string? UserAgent, MediaOptions? Media = null);
 
     record StoredItem(
         Guid Id,
@@ -38,7 +38,8 @@ public class DownloadStore(string dataDir)
                 s.Request.Mime,
                 s.Request.SizeHint,
                 TryUnprotect(s.Request.ProtectedCookies),
-                s.Request.UserAgent),
+                s.Request.UserAgent,
+                s.Request.Media),
             TargetPath = s.TargetPath,
             Category = s.Category,
             Status = s.Status == DownloadStatus.Downloading ? DownloadStatus.Paused : s.Status,
@@ -78,7 +79,8 @@ public class DownloadStore(string dataDir)
                 i.Request.Mime,
                 i.Request.SizeHint,
                 string.IsNullOrEmpty(i.Request.Cookies) ? null : CookieProtector.Protect(i.Request.Cookies),
-                i.Request.UserAgent),
+                i.Request.UserAgent,
+                i.Request.Media),
             i.TargetPath,
             i.Category,
             i.Status,

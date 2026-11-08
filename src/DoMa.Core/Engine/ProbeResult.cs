@@ -20,4 +20,5 @@ public record ProbeResult(
     string? FileName,
     string? ContentType,
     ProbeFailure Failure,
-    int? StatusCode);
+    int? StatusCode,
+    YouTube.YouTubeInfo? Media = null);
