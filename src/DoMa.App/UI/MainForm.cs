@@ -46,6 +46,10 @@ public sealed class MainForm : Form
     /// <summary>Thêm nhiều link một lúc (dán/kéo-thả): MainContext mở hộp "Tải nhiều link".</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Func<IReadOnlyList<string>, Task>? AddMany { get; set; }
+
+    /// <summary>Chuyển video .ts đã tải sang .mp4.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action<DownloadItem>? ConvertToMp4 { get; set; }
     private readonly Action _openSettings;
     private readonly Action _requestExit;
     private readonly Action _shutdown;
@@ -732,6 +736,7 @@ public sealed class MainForm : Form
         }));
         var scan = ThemedRenderer.Item(menu, "Quét bằng Windows Defender", IconKind.Shield, (_, _) => ForFirst(i => _ = ScanAsync(i)));
         var extract = ThemedRenderer.Item(menu, "Giải nén tại đây", IconKind.Archive, (_, _) => ForFirst(i => _ = ExtractAsync(i.TargetPath)));
+        var mp4 = ThemedRenderer.Item(menu, "Chuyển sang MP4", IconKind.Refresh, (_, _) => ForFirst(i => ConvertToMp4?.Invoke(i)));
         menu.Items.Add(new ToolStripSeparator());
         ThemedRenderer.Item(menu, "Tải lại", IconKind.Refresh, (_, _) =>
         {
@@ -753,6 +758,8 @@ public sealed class MainForm : Form
             scan.Enabled = done && Core.PostProcess.SecurityTools.DefenderPath() is not null;
             extract.Visible = first is not null && Core.PostProcess.ArchiveExtractor.CanExtract(first.TargetPath);
             extract.Enabled = done;
+            mp4.Visible = first is not null && Core.PostProcess.TsToMp4.CanConvert(first.TargetPath);
+            mp4.Enabled = done;
         };
         return menu;
     }

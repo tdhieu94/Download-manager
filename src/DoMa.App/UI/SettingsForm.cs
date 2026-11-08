@@ -22,6 +22,7 @@ public sealed class SettingsForm : Form
     private readonly ComboBox _appearance = new() { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
     private readonly ToggleSwitch _warn = new("Cảnh báo trước khi tải", "Báo khi tệp là chương trình, giả dạng đuôi khác hoặc tải từ nguồn đáng ngờ");
     private readonly ToggleSwitch _scan = new("Quét bằng Windows Defender", "Quét mỗi tệp vừa tải xong; báo ngay nếu phát hiện mối nguy");
+    private readonly ToggleSwitch _mp4 = new("Tự chuyển video .ts sang .mp4", "Video tải từ luồng (HLS) được đổi sang .mp4 để mở trên mọi máy, không giảm chất lượng");
     private readonly ToggleSwitch _extract = new("Tự giải nén tệp .zip", "Giải nén vào thư mục cùng tên, cạnh tệp vừa tải");
     private readonly ToggleSwitch _startup = new("Chạy cùng Windows", "Tự khởi động và ẩn dưới khay hệ thống");
     private readonly ToggleSwitch _clipboard = new("Bắt link khi copy", "Copy một link tải (.zip, .exe, .mp4…) là DoMa đề nghị tải giúp");
@@ -134,8 +135,10 @@ public sealed class SettingsForm : Form
         _scan.SetBounds(x, y, w, S(46));
         y += S(50);
         _extract.SetBounds(x, y, w, S(46));
+        y += S(50);
+        _mp4.SetBounds(x, y, w, S(46));
         y += S(56);
-        body.Controls.AddRange([_warn, _scan, _extract]);
+        body.Controls.AddRange([_warn, _scan, _extract, _mp4]);
 
         Section("Giao diện");
         var appearanceCaption = DialogParts.FieldLabel("Chế độ màu (áp dụng khi mở lại DoMa)");
@@ -178,6 +181,7 @@ public sealed class SettingsForm : Form
         _warn.Checked = current.WarnBeforeDownload;
         _scan.Checked = current.ScanAfterDownload;
         _extract.Checked = current.AutoExtractZip;
+        _mp4.Checked = current.ConvertTsToMp4;
         _speed.Value = Math.Clamp(current.SpeedLimitKBps, 0, 1_000_000);
         _schedule.Checked = current.ScheduleEnabled;
         _scheduleStart.Text = current.ScheduleStart;
@@ -240,6 +244,7 @@ public sealed class SettingsForm : Form
             WarnBeforeDownload = _warn.Checked,
             ScanAfterDownload = _scan.Checked,
             AutoExtractZip = _extract.Checked,
+            ConvertTsToMp4 = _mp4.Checked,
             Appearance = Appearances[Math.Max(0, _appearance.SelectedIndex)].Value,
             ScheduleEnabled = _schedule.Checked,
             ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart,

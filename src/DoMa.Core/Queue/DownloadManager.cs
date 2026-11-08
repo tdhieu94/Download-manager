@@ -134,6 +134,22 @@ public class DownloadManager
         }
     }
 
+    /// <summary>Tệp đã tải được đổi sang tệp khác (vd. .ts → .mp4): cập nhật đường dẫn trong danh sách.</summary>
+    public void Relocate(Guid id, string newPath)
+    {
+        lock (_gate)
+        {
+            var item = _items.FirstOrDefault(i => i.Id == id);
+            if (item is null || item.Status != DownloadStatus.Completed)
+                return;
+            item.TargetPath = newPath;
+            item.TotalBytes = new FileInfo(newPath) is { Exists: true } info ? info.Length : item.TotalBytes;
+            item.DownloadedBytes = item.TotalBytes ?? item.DownloadedBytes;
+            Persist();
+            Raise(Changed, item);
+        }
+    }
+
     /// <summary>Ghi nhận (hoặc xoá, khi threat = null) cảnh báo mã độc cho một tệp.</summary>
     public void MarkThreat(Guid id, string? threat)
     {

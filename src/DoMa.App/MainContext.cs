@@ -70,6 +70,7 @@ internal sealed class MainContext : ApplicationContext
         _form = new MainForm(_manager, AddLinkAsync, OpenSettings, Exit, ExitOnShutdown, _log);
         _form.ThreatFound = item => HandleThreat(item.Id, item.TargetPath);
         _form.AddMany = AddManyAsync;
+        _form.ConvertToMp4 = item => _ = ConvertVideoAsync(item.Id, item.TargetPath, notify: true);
         _schedule = new ScheduleService(_manager, () => _settings, text => _tray?.Notify(text, ShowNow), ConfirmPower);
         _form.QuickActions = new QuickActions(
             () => _settings.SpeedLimitKBps,
@@ -373,12 +374,39 @@ internal sealed class MainContext : ApplicationContext
         }
     }
 
+    /// <summary>
+    /// Chuyển video .ts sang .mp4 (đóng gói lại, không nén), xoá tệp .ts và cập nhật danh sách.
+    /// Trả về đường dẫn .mp4, hoặc null nếu không chuyển được (giữ nguyên .ts).
+    /// </summary>
+    private async Task<string?> ConvertVideoAsync(Guid id, string path, bool notify)
+    {
+        var output = FileNameResolver.MakeUnique(Path.ChangeExtension(path, ".mp4"), p => File.Exists(p) || Directory.Exists(p));
+        try
+        {
+            await Task.Run(() => TsToMp4.Convert(path, output));
+            File.Delete(path);
+            _manager.Relocate(id, output);
+            if (notify)
+                PostToForm(() => _tray.Notify($"Đã chuyển sang MP4: {Path.GetFileName(output)}", output, ToolTipIcon.Info));
+            return output;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException)
+        {
+            _log.Write("mp4", e, null);
+            var reason = e is NotSupportedException ? e.Message : "Không chuyển được sang MP4, tệp .ts vẫn được giữ nguyên.";
+            PostToForm(() => _tray.Notify(reason, path, ToolTipIcon.Warning));
+            return null;
+        }
+    }
+
     private async Task PostProcessAsync(Guid id, string path, string url, Settings settings)
     {
         try
         {
             if (!File.Exists(path))
                 return;
+            if (settings.ConvertTsToMp4 && TsToMp4.CanConvert(path) && await ConvertVideoAsync(id, path, notify: false) is { } mp4)
+                path = mp4;
             SecurityTools.MarkFromInternet(path, url);
             if (settings.ScanAfterDownload)
             {

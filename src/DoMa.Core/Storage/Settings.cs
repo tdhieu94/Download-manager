@@ -31,6 +31,9 @@ public class Settings
     /// <summary>Quét tệp vừa tải bằng Windows Defender.</summary>
     public bool ScanAfterDownload { get; set; }
 
+    /// <summary>Video .ts (từ luồng HLS) tải xong thì tự chuyển sang .mp4, không nén lại.</summary>
+    public bool ConvertTsToMp4 { get; set; } = true;
+
     /// <summary>Tự giải nén tệp .zip vừa tải vào thư mục cùng tên.</summary>
     public bool AutoExtractZip { get; set; }
 
