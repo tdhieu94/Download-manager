@@ -5,8 +5,40 @@ namespace DoMa.App.UI;
 
 public enum DownloadFilter { All, Active, Completed, Later, Documents, Software, Archives, Media, Other }
 
+/// <summary>Cột dùng để sắp xếp danh sách; Added = mặc định (tệp mới thêm đứng trên cùng).</summary>
+public enum SortColumn { Added, Name, Size, Progress, Time, Status }
+
 public static class DownloadView
 {
+    /// <summary>Sắp xếp danh sách theo một cột. Tệp bằng nhau thì tệp mới thêm đứng trước.</summary>
+    public static IEnumerable<DownloadItem> Sort(IEnumerable<DownloadItem> items, SortColumn column, bool ascending)
+    {
+        var newest = items.OrderByDescending(i => i.AddedAt);
+        if (column == SortColumn.Added)
+            return ascending ? items.OrderBy(i => i.AddedAt) : newest;
+        Func<DownloadItem, IComparable> key = column switch
+        {
+            SortColumn.Name => i => Path.GetFileName(i.TargetPath).ToUpperInvariant(),
+            SortColumn.Size => i => i.TotalBytes ?? i.DownloadedBytes,
+            SortColumn.Progress => i => i.Status == DownloadStatus.Completed ? 100 : Percent(i.DownloadedBytes, i.TotalBytes),
+            SortColumn.Time => i => i.CompletedAt ?? i.AddedAt,
+            _ => i => StatusOrder(i.Status),
+        };
+        // OrderBy ổn định nên thứ tự "mới thêm trước" được giữ giữa các tệp bằng nhau.
+        return ascending ? newest.OrderBy(key) : newest.OrderByDescending(key);
+    }
+
+    /// <summary>Tăng dần: đang tải, đang chờ, tạm dừng, lỗi, chờ tải sau, rồi đã xong.</summary>
+    private static int StatusOrder(DownloadStatus status) => status switch
+    {
+        DownloadStatus.Downloading => 0,
+        DownloadStatus.Queued => 1,
+        DownloadStatus.Paused => 2,
+        DownloadStatus.Failed => 3,
+        DownloadStatus.Later => 4,
+        _ => 5,
+    };
+
     private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
     private static readonly string[] Units = ["B", "KB", "MB", "GB", "TB"];
 

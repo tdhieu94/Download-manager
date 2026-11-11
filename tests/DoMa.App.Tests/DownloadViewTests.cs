@@ -155,4 +155,27 @@ public class DownloadViewTests
     [InlineData("-5", null)]
     public void parses_typed_speed(string text, int? expected) =>
         Assert.Equal(expected, DownloadView.ParseSpeedKBps(text));
+
+    [Fact]
+    public void sorts_by_column_and_falls_back_to_newest_first()
+    {
+        var t = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        DownloadItem Make(string name, long size, DownloadStatus status, int minutes)
+        {
+            var item = Item(status, Category.Other);
+            item.TargetPath = Path.Combine("d", name);
+            item.TotalBytes = size;
+            item.AddedAt = t.AddMinutes(minutes);
+            return item;
+        }
+        var b = Make("b.zip", 300, DownloadStatus.Completed, 1);
+        var a = Make("A.zip", 100, DownloadStatus.Downloading, 2);
+        var c = Make("c.zip", 300, DownloadStatus.Queued, 3);
+        DownloadItem[] items = [b, a, c];
+
+        Assert.Equal([c, a, b], DownloadView.Sort(items, SortColumn.Added, false));
+        Assert.Equal([a, b, c], DownloadView.Sort(items, SortColumn.Name, true));
+        Assert.Equal([c, b, a], DownloadView.Sort(items, SortColumn.Size, false));
+        Assert.Equal([a, c, b], DownloadView.Sort(items, SortColumn.Status, true));
+    }
 }

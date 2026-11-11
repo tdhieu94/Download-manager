@@ -660,6 +660,21 @@ public sealed class MainForm : Form
                 e.CellStyle.BackColor = Theme.SurfaceAlt;
         };
         _grid.CellPainting += PaintCell;
+        _grid.ColumnHeaderMouseClick += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left || SortColumnAt(e.ColumnIndex) is not { } column)
+                return;
+            // Bấm lần đầu: sắp xếp theo cột; lần hai: đảo chiều; lần ba: về mặc định (mới thêm trước).
+            if (_sortColumn != column)
+                (_sortColumn, _sortAscending) = (column, column is SortColumn.Name or SortColumn.Status);
+            else if (_sortAscending == column is SortColumn.Name or SortColumn.Status)
+                _sortAscending = !_sortAscending;
+            else
+                (_sortColumn, _sortAscending) = (SortColumn.Added, false);
+            _dirty = true;
+            RefreshView();
+            _grid.Invalidate();
+        };
         _grid.ShowCellToolTips = true;
         _grid.CellToolTipTextNeeded += (_, e) =>
         {
@@ -718,7 +733,8 @@ public sealed class MainForm : Form
             e.PaintBackground(e.CellBounds, false);
             if (e.ColumnIndex >= 0)
             {
-                TextRenderer.DrawText(g, e.Value?.ToString(), Theme.SmallBold,
+                var sorted = SortColumnAt(e.ColumnIndex) is { } column && column == _sortColumn;
+                TextRenderer.DrawText(g, e.Value + (sorted ? (_sortAscending ? "  ▲" : "  ▼") : ""), Theme.SmallBold,
                     new Rectangle(e.CellBounds.X + S(10), e.CellBounds.Y, e.CellBounds.Width - S(14), e.CellBounds.Height), Theme.TextMuted,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             }
@@ -804,6 +820,7 @@ public sealed class MainForm : Form
         ThemedRenderer.Item(menu, L.T("Mở thư mục"), IconKind.Folder, (_, _) => ForFirst(i => OpenFolder(i.TargetPath))).ShortcutKeyDisplayString = "Ctrl+O";
         var source = ThemedRenderer.Item(menu, L.T("Mở trang nguồn"), IconKind.Link, (_, _) => ForFirst(OpenSource));
         ThemedRenderer.Item(menu, "Copy link", IconKind.Copy, (_, _) => ForFirst(CopyLink)).ShortcutKeyDisplayString = "Ctrl+C";
+        ThemedRenderer.Item(menu, L.T("Xuất link ra tệp .txt…"), IconKind.Document, (_, _) => ExportLinks());
         var rename = ThemedRenderer.Item(menu, L.T("Đổi tên…"), IconKind.File, (_, _) => ForFirst(RenameItem));
         rename.ShortcutKeyDisplayString = "F2";
         menu.Items.Add(new ToolStripSeparator());
@@ -1145,6 +1162,48 @@ public sealed class MainForm : Form
         }
     }
 
+    private SortColumn _sortColumn = SortColumn.Added;
+    private bool _sortAscending;
+
+    /// <summary>Cột nào sắp xếp được (tốc độ và thời gian còn lại đổi liên tục nên không).</summary>
+    private static SortColumn? SortColumnAt(int index) => index switch
+    {
+        0 => SortColumn.Name,
+        1 => SortColumn.Size,
+        2 => SortColumn.Progress,
+        5 => SortColumn.Time,
+        6 => SortColumn.Status,
+        _ => null,
+    };
+
+    /// <summary>Ghi link của các tệp đã chọn ra một tệp .txt (mỗi dòng một link), nhập lại được bằng "Nhập từ tệp .txt…".</summary>
+    private void ExportLinks()
+    {
+        var ids = SelectedIds().ToHashSet();
+        var links = _view.Where(i => ids.Contains(i.Id)).Select(i => SourceLink(i)).Distinct().ToList();
+        if (links.Count == 0)
+            return;
+        using var dialog = new SaveFileDialog
+        {
+            Title = L.T("Xuất link ra tệp"),
+            Filter = L.T("Tệp văn bản (*.txt)|*.txt"),
+            FileName = "DoMa-links.txt",
+            OverwritePrompt = true,
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+        try
+        {
+            File.WriteAllLines(dialog.FileName, links);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, L.T("Không ghi được tệp: ") + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static string SourceLink(DownloadItem item) => item.Request.Url;
+
     private IReadOnlyDictionary<Guid, int> _queuePositions = new Dictionary<Guid, int>();
 
     private int? QueuePosition(DownloadItem item) =>
@@ -1202,9 +1261,8 @@ public sealed class MainForm : Form
 
         var current = _nav.Selected;
         var query = _search.Text.Trim();
-        // Tệp mới thêm gần nhất đứng trên cùng.
-        var next = items
-            .OrderByDescending(i => i.AddedAt)
+        // Mặc định tệp mới thêm gần nhất đứng trên cùng; bấm tiêu đề cột để sắp xếp khác.
+        var next = DownloadView.Sort(items, _sortColumn, _sortAscending)
             .Where(i => DownloadView.Matches(current, i))
             .Where(i => query.Length == 0 || Path.GetFileName(i.TargetPath).Contains(query, StringComparison.CurrentCultureIgnoreCase))
             .ToList();
