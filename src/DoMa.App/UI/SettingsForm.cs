@@ -16,6 +16,16 @@ public sealed class SettingsForm : Form
     private readonly NumericUpDown _concurrent = new() { Minimum = 1, Maximum = 10 };
     private readonly NumericUpDown _speed = new() { Minimum = 0, Maximum = 1_000_000, Increment = 256, ThousandsSeparator = true };
     private readonly InputBox _proxy = new(IconKind.Link) { PlaceholderText = L.T("Để trống = theo Windows") };
+    private readonly NumericUpDown _autoClear = new() { Minimum = 0, Maximum = 3650 };
+    private readonly ModernButton _backup = new(L.T("Sao lưu…"), IconKind.Download);
+    private readonly ModernButton _restore = new(L.T("Khôi phục…"), IconKind.Refresh);
+
+    /// <summary>Việc làm khi bấm "Sao lưu…" / "Khôi phục…" (do nơi mở hộp thoại gán).</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action? Backup { get; set; }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action? Restore { get; set; }
+
     private readonly ToggleSwitch _schedule = new(L.T("Tải theo lịch hằng ngày"), L.T("Tự bắt đầu các tệp “Chờ tải sau” vào giờ hẹn, tự đưa về hàng chờ khi tới giờ dừng"));
     private readonly InputBox _scheduleStart = new(IconKind.Clock) { PlaceholderText = "23:00" };
     private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = L.T("Để trống = không dừng") };
@@ -181,6 +191,27 @@ public sealed class SettingsForm : Form
         _network.SetBounds(x, y, w, S(46));
         y += S(52);
         body.Controls.AddRange([_startup, _notify, _updates, _clipboard, _network]);
+
+        Section(L.T("Danh sách và sao lưu"));
+        StyleNumber(_autoClear);
+        var clearCaption = DialogParts.FieldLabel(L.T("Tự bỏ tệp đã xong khỏi danh sách sau (ngày, 0 = giữ mãi)"));
+        clearCaption.Location = new Point(x, y);
+        y += S(24);
+        _autoClear.SetBounds(x, y, half, S(30));
+        body.Controls.AddRange([clearCaption, _autoClear]);
+        y += S(46);
+        var backupHint = DialogParts.Hint(L.T("Sao lưu cài đặt, danh sách tải và kênh đang theo dõi ra một tệp, để khôi phục khi cài lại máy."));
+        backupHint.Location = new Point(x, y);
+        body.Controls.Add(backupHint);
+        y += S(26);
+        _backup.AutoSize = false;
+        _restore.AutoSize = false;
+        _backup.SetBounds(x, y, S(150), S(36));
+        _restore.SetBounds(x + S(162), y, S(150), S(36));
+        _backup.Click += (_, _) => Backup?.Invoke();
+        _restore.Click += (_, _) => Restore?.Invoke();
+        body.Controls.AddRange([_backup, _restore]);
+        y += S(52);
         body.AutoScrollMinSize = new Size(0, y);
 
         Controls.Add(body);
@@ -205,6 +236,7 @@ public sealed class SettingsForm : Form
         _mp4.Checked = current.ConvertTsToMp4;
         _speed.Value = Math.Clamp(current.SpeedLimitKBps, 0, 1_000_000);
         _proxy.Text = current.Proxy;
+        _autoClear.Value = Math.Clamp(current.AutoClearDays, 0, 3650);
         _schedule.Checked = current.ScheduleEnabled;
         _scheduleStart.Text = current.ScheduleStart;
         _scheduleStop.Text = current.ScheduleStop ?? "";
@@ -288,6 +320,7 @@ public sealed class SettingsForm : Form
             s.ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart;
             s.ScheduleStop = _scheduleStop.Text.Trim().Length > 0 ? _scheduleStop.Text.Trim() : null;
             s.Proxy = _proxy.Text.Trim();
+        s.AutoClearDays = (int)_autoClear.Value;
         }
     }
 

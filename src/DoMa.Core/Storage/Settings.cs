@@ -25,6 +25,9 @@ public class Settings
     /// <summary>Proxy cho mọi lượt tải, vd. "http://127.0.0.1:8080" hoặc "socks5://127.0.0.1:1080"; trống = theo Windows.</summary>
     public string Proxy { get; set; } = "";
 
+    /// <summary>Tệp đã tải xong được tự bỏ khỏi danh sách sau chừng này ngày (0 = giữ mãi). Tệp trên ổ đĩa không bị xoá.</summary>
+    public int AutoClearDays { get; set; }
+
     /// <summary>Khi copy một link tải (vd. .zip, .exe, .mp4), hiện thông báo đề nghị tải bằng DoMa.</summary>
     public bool WatchClipboard { get; set; } = true;
 

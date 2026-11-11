@@ -44,6 +44,14 @@ internal sealed class MainContext : ApplicationContext
     public MainContext(bool hidden)
     {
         Directory.CreateDirectory(AppPaths.DataDir);
+        try
+        {
+            Backup.ApplyPending(AppPaths.DataDir);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("restore", e, null);
+        }
         Directory.CreateDirectory(AppPaths.StatesDir);
         _settings = _settingsStore.Load();
         _http = HttpClientFactory.Create(() => _settings.Proxy);
@@ -322,6 +330,76 @@ internal sealed class MainContext : ApplicationContext
         }
     }
 
+    /// <summary>Tự bỏ khỏi danh sách các tệp đã xong lâu hơn số ngày đặt trong Cài đặt.</summary>
+    private void ClearOldCompleted()
+    {
+        if (_settings.AutoClearDays <= 0)
+            return;
+        var cutoff = DateTimeOffset.UtcNow - TimeSpan.FromDays(_settings.AutoClearDays);
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                _manager.ClearCompletedBefore(cutoff);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                _log.Write("autoclear", e, null);
+            }
+        });
+    }
+
+    private void BackupData(IWin32Window owner)
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Title = L.T("Sao lưu dữ liệu DoMa"),
+            Filter = L.T("Tệp sao lưu DoMa (*.zip)|*.zip"),
+            FileName = $"DoMa-backup-{DateTime.Now:yyyy-MM-dd}.zip",
+        };
+        if (dialog.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK)
+            return;
+        try
+        {
+            SaveChannels();
+            Backup.Create(AppPaths.DataDir, dialog.FileName);
+            MessageBox.Show(owner, L.T("Đã sao lưu cài đặt, danh sách tải và các kênh đang theo dõi."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write("backup", e, null);
+            MessageBox.Show(owner, L.T("Không sao lưu được: ") + e.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>Trả về true nếu đã nhận tệp sao lưu: DoMa cần đóng để áp dụng ở lần mở kế tiếp.</summary>
+    private bool RestoreData(IWin32Window owner)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = L.T("Khôi phục dữ liệu DoMa"),
+            Filter = L.T("Tệp sao lưu DoMa (*.zip)|*.zip"),
+        };
+        if (dialog.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK)
+            return false;
+        var answer = MessageBox.Show(owner,
+            L.T("Cài đặt và danh sách tải hiện tại sẽ được thay bằng dữ liệu trong bản sao lưu. Tệp đã tải trên ổ đĩa không bị ảnh hưởng.\n\nDoMa sẽ đóng lại; hãy mở lại DoMa để dùng dữ liệu vừa khôi phục. Tiếp tục?"),
+            L.T("Khôi phục dữ liệu DoMa"), MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (answer != System.Windows.Forms.DialogResult.OK)
+            return false;
+        try
+        {
+            Backup.Stage(dialog.FileName, AppPaths.DataDir);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            _log.Write("restore", e, null);
+            MessageBox.Show(owner, L.T("Không khôi phục được. Tệp này không phải bản sao lưu của DoMa hoặc đã hỏng."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+    }
+
     private void SaveChannels()
     {
         try
@@ -339,6 +417,8 @@ internal sealed class MainContext : ApplicationContext
     {
         _channels = _channelStore.Load();
         _channelTimer.Tick += (_, _) => _ = CheckChannelsAsync(force: false);
+        _channelTimer.Tick += (_, _) => ClearOldCompleted();
+        ClearOldCompleted();
         _channelTimer.Start();
         // Kiểm tra lần đầu sau khi mở DoMa 2 phút, để không làm chậm lúc khởi động.
         _ = Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ => PostToForm(() => _ = CheckChannelsAsync(force: false)), TaskScheduler.Default);
@@ -662,8 +742,24 @@ internal sealed class MainContext : ApplicationContext
 
     private void OpenSettings()
     {
+        var restored = false;
         using var dialog = new SettingsForm(_settings);
-        if (dialog.ShowDialog(_form) != System.Windows.Forms.DialogResult.OK)
+        dialog.Backup = () => BackupData(dialog);
+        dialog.Restore = () =>
+        {
+            if (!RestoreData(dialog))
+                return;
+            restored = true;
+            dialog.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+            dialog.Close();
+        };
+        var result = dialog.ShowDialog(_form);
+        if (restored)
+        {
+            Exit();
+            return;
+        }
+        if (result != System.Windows.Forms.DialogResult.OK)
             return;
         var updated = dialog.Result();
         try

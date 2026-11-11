@@ -746,6 +746,25 @@ public sealed class DownloadManagerTests : IDisposable
         Assert.True(_engine.Pending.ContainsKey("https://h/b"));
     }
 
+    [Fact]
+    public void clears_only_files_completed_before_cutoff()
+    {
+        var m = Manager();
+        m.Add(Req("https://h/a"), Target("a.bin"), true);
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Completed, Target("a.bin"), null));
+        WaitUntil(() => m.Items.Single().Status == DownloadStatus.Completed);
+        _time.Advance(TimeSpan.FromDays(10));
+        m.Add(Req("https://h/b"), Target("b.bin"), true);
+        _engine.Finish("https://h/b", new EngineResult(EngineOutcome.Completed, Target("b.bin"), null));
+        var waiting = m.Add(Req("https://h/c"), Target("c.bin"), false);
+        WaitUntil(() => m.Items.Count(i => i.Status == DownloadStatus.Completed) == 2);
+
+        Assert.Equal(1, m.ClearCompletedBefore(_time.GetUtcNow() - TimeSpan.FromDays(7)));
+
+        Assert.Equal(["https://h/b", "https://h/c"], m.Items.Select(i => i.Request.Url));
+        Assert.Equal(DownloadStatus.Later, StatusOf(m, waiting.Id));
+    }
+
     private sealed class FakeEngine : IDownloadEngine
     {
         private int _runs;

@@ -249,6 +249,17 @@ public class DownloadManager
         run.Cts.Cancel();
     }
 
+    /// <summary>Bỏ khỏi danh sách các tệp đã tải xong trước <paramref name="cutoff"/> (giữ nguyên tệp trên ổ đĩa). Trả về số tệp đã bỏ.</summary>
+    public int ClearCompletedBefore(DateTimeOffset cutoff)
+    {
+        List<Guid> old;
+        lock (_gate)
+            old = _items.Where(i => i.Status == DownloadStatus.Completed && (i.CompletedAt ?? i.AddedAt) < cutoff).Select(i => i.Id).ToList();
+        if (old.Count > 0)
+            Remove(old, deleteFiles: false);
+        return old.Count;
+    }
+
     /// <summary>Số lần tự tải tiếp tối đa cho một tệp sau lỗi mạng (sau đó chờ người dùng bấm).</summary>
     public const int MaxAutoRetries = 8;
 
