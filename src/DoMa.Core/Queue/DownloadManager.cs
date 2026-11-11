@@ -643,7 +643,7 @@ public class DownloadManager
             var probe = await _probe(run.Item.Request, run.Cts.Token);
             if (!probe.Ok)
             {
-                result = new EngineResult(EngineOutcome.Failed, null, ProbeMessage(probe), probe.Failure == ProbeFailure.Network);
+                result = new EngineResult(EngineOutcome.Failed, null, ProbeMessage(probe), probe.Failure == ProbeFailure.Network || RetryPolicy.IsTemporary(probe.StatusCode));
             }
             else
             {
@@ -716,6 +716,7 @@ public class DownloadManager
         ProbeFailure.NotFound => L.T("Không tìm thấy tệp trên máy chủ"),
         ProbeFailure.HtmlInsteadOfFile => L.T("Máy chủ trả về trang web thay vì tệp"),
         ProbeFailure.Network => L.T("Không kết nối được tới máy chủ"),
+        _ when RetryPolicy.IsTemporary(probe.StatusCode) => RetryPolicy.BusyMessage(probe.StatusCode!.Value),
         _ => probe.StatusCode is int code ? L.F("Máy chủ báo lỗi {0}", code) : L.T("Máy chủ báo lỗi"),
     };
 

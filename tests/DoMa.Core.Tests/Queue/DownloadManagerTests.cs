@@ -765,6 +765,23 @@ public sealed class DownloadManagerTests : IDisposable
         Assert.Equal(DownloadStatus.Later, StatusOf(m, waiting.Id));
     }
 
+    [Theory]
+    [InlineData(503, true)]
+    [InlineData(429, true)]
+    [InlineData(500, false)]
+    public void busy_server_is_retried_like_a_network_error(int status, bool retried)
+    {
+        _probe = new ProbeResult(false, null, null, false, null, null, null, null, ProbeFailure.Other, status);
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        WaitUntil(() => StatusOf(m, item.Id) == DownloadStatus.Failed);
+
+        Assert.Equal(retried, m.Items.Single().NetworkError);
+        Assert.Equal(retried, m.Items.Single().ErrorMessage!.Contains("đang bận"));
+        _probe = new ProbeResult(true, null, 10000, true, null, null, "f.bin", null, ProbeFailure.None, 206);
+        Assert.Equal(retried ? 1 : 0, m.ResumeNetworkFailures(now: true));
+    }
+
     private sealed class FakeEngine : IDownloadEngine
     {
         private int _runs;

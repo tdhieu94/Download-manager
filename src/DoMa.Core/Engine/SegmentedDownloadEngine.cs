@@ -52,7 +52,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
             if (outcome != EngineOutcome.Completed)
             {
                 run.SaveState();
-                return new EngineResult(outcome, null, error, outcome == EngineOutcome.Failed && error == NetworkMessage);
+                return new EngineResult(outcome, null, error, outcome == EngineOutcome.Failed && (error == NetworkMessage || run.ServerBusy));
             }
 
             var finalPath = FileNameResolver.MakeUnique(job.TargetPath, p => File.Exists(p) || Directory.Exists(p));
@@ -130,7 +130,10 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
             if (run.PauseToken.IsCancellationRequested)
                 return (EngineOutcome.Paused, null);
             if (fault is not null)
+            {
+                run.ServerBusy = fault is HttpRequestException { StatusCode: { } code } && RetryPolicy.IsTemporary((int)code);
                 return (EngineOutcome.Failed, Describe(fault, run.PartPath));
+            }
             return (EngineOutcome.Failed, L.T("Dung lượng tải về không khớp"));
         }
         finally
@@ -370,6 +373,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
     {
         WriteFailedException w => WriteError(w.InnerException!, partPath),
         HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone } => L.T("Link đã hết hạn. Bấm chuột phải › Làm mới link để tải tiếp"),
+        HttpRequestException { StatusCode: { } code } when RetryPolicy.IsTemporary((int)code) => RetryPolicy.BusyMessage((int)code),
         HttpRequestException { StatusCode: { } code } => L.F("Máy chủ trả lỗi {0}", (int)code),
         _ => NetworkMessage,
     };
@@ -395,6 +399,9 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         public int Active;
 
         public DownloadJob Job { get; } = job;
+
+        /// <summary>Lỗi cuối là do máy chủ bận/quá tải: tự tải tiếp được sau một lúc.</summary>
+        public bool ServerBusy { get; set; }
         public DownloadState State { get; } = state;
         public SafeFileHandle Handle { get; } = handle;
         public CancellationToken PauseToken { get; } = pauseToken;

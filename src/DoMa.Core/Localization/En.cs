@@ -102,6 +102,7 @@ public static class En
         ["Lịch từ {0:HH\\:mm}"] = "Schedule from {0:HH\\:mm}",
         ["Xong sẽ cho máy ngủ"] = "Will sleep when done",
         ["Xong"] = "Done",
+        ["Máy chủ đang bận (lỗi {0}). DoMa sẽ tự thử lại sau"] = "The server is busy (error {0}). DoMa will retry automatically",
         ["Tìm theo tên file hoặc trang web  (Ctrl+F)"] = "Search by file name or website  (Ctrl+F)",
         ["Tệp này không phải bản sao lưu của DoMa."] = "This file is not a DoMa backup.",
         ["Sao lưu dữ liệu DoMa"] = "Back up DoMa data",
