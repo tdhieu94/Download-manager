@@ -127,4 +127,20 @@ public class DownloadViewTests
         Assert.Equal(item.CompletedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture), DownloadView.TimeText(item));
         Assert.Contains("Mất 1 giờ 30 phút", DownloadView.TimeTooltip(item));
     }
+
+    [Fact]
+    public void queued_status_shows_position_in_queue()
+    {
+        var item = Item(DownloadStatus.Queued, Category.Other);
+        Assert.Equal("Đang chờ · thứ 2", DownloadView.StatusText(item, 2));
+        Assert.Equal("Đang tải", DownloadView.StatusText(Item(DownloadStatus.Downloading, Category.Other), 2));
+    }
+
+    [Fact]
+    public void speed_text_shows_own_limit()
+    {
+        Assert.Equal("", DownloadView.SpeedText(0, 0));
+        Assert.Equal("≤1 MB/s", DownloadView.SpeedText(0, 1024));
+        Assert.Equal("512 KB/s · ≤1 MB/s", DownloadView.SpeedText(512 * 1024, 1024));
+    }
 }

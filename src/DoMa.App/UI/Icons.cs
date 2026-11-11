@@ -30,6 +30,8 @@ public enum IconKind
     Sun,
     Shield,
     Hash,
+    ArrowUp,
+    ArrowDown,
 }
 
 /// <summary>Bộ icon dạng nét (line icon) vẽ bằng GDI+, sắc nét ở mọi mức DPI.</summary>
@@ -127,6 +129,14 @@ public static class Icons
                 break;
             case IconKind.Check:
                 g.DrawLines(p, [new PointF(5, 12.5f), new PointF(10, 17.5f), new PointF(19, 7)]);
+                break;
+            case IconKind.ArrowUp:
+                g.DrawLine(p, 12, 19, 12, 5);
+                g.DrawLines(p, [new PointF(6, 11), new PointF(12, 5), new PointF(18, 11)]);
+                break;
+            case IconKind.ArrowDown:
+                g.DrawLine(p, 12, 5, 12, 19);
+                g.DrawLines(p, [new PointF(6, 13), new PointF(12, 19), new PointF(18, 13)]);
                 break;
             case IconKind.Clock:
                 g.DrawEllipse(p, 3.5f, 3.5f, 17, 17);

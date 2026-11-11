@@ -268,4 +268,21 @@ public sealed class YouTubeTests : IDisposable
     {
         public void Report(EngineProgress value) => report(value);
     }
+
+    [Fact]
+    public void download_arguments_limit_rate_only_when_set()
+    {
+        Assert.DoesNotContain("--limit-rate", YtDlp.DownloadArguments(W, "x", null, null));
+        var args = YtDlp.DownloadArguments(W, "x", null, null, limitBytesPerSec: 524288).ToList();
+        Assert.Equal("524288", args[args.IndexOf("--limit-rate") + 1]);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(100, 0, 100)]
+    [InlineData(0, 50, 50)]
+    [InlineData(100, 50, 50)]
+    [InlineData(30, 50, 30)]
+    public void tighter_limit_wins(long a, long b, long expected) =>
+        Assert.Equal(expected, BandwidthLimiter.Tighter(a, b));
 }

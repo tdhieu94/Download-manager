@@ -19,7 +19,8 @@ public class DownloadStore(string dataDir)
         DateTimeOffset AddedAt,
         DateTimeOffset? CompletedAt,
         string? Threat = null,
-        bool NetworkError = false);
+        bool NetworkError = false,
+        int SpeedLimitKBps = 0);
 
     string FilePath => Path.Combine(dataDir, "downloads.json");
 
@@ -51,6 +52,7 @@ public class DownloadStore(string dataDir)
             CompletedAt = s.CompletedAt,
             Threat = s.Threat,
             NetworkError = s.NetworkError,
+            SpeedLimitKBps = Math.Max(0, s.SpeedLimitKBps),
         }).ToList();
     }
 
@@ -91,7 +93,8 @@ public class DownloadStore(string dataDir)
             i.AddedAt,
             i.CompletedAt,
             i.Threat,
-            i.NetworkError)).ToList();
+            i.NetworkError,
+            i.SpeedLimitKBps)).ToList();
         JsonFile.Write(FilePath, stored);
     }
 }

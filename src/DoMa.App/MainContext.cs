@@ -53,7 +53,7 @@ internal sealed class MainContext : ApplicationContext
         var ui = _ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
         _ytTools = new Core.Engine.YouTube.YouTubeTools(Path.Combine(AppPaths.DataDir, "tools"), _http);
-        _ytEngine = new Core.Engine.YouTube.YouTubeDownloadEngine(_ytTools);
+        _ytEngine = new Core.Engine.YouTube.YouTubeDownloadEngine(_ytTools) { SpeedLimit = () => _limiter.LimitBytesPerSec };
 
         var prober = new LinkProber(_http);
         _manager = new DownloadManager(
@@ -684,8 +684,11 @@ internal sealed class MainContext : ApplicationContext
 
     private void ApplySettings(Settings updated)
     {
+        var limitChanged = updated.SpeedLimitKBps != _settings.SpeedLimitKBps;
         _settings = updated;
         _limiter.LimitBytesPerSec = updated.SpeedLimitKBps * 1024L;
+        if (limitChanged)
+            _manager.ApplySpeedLimitToTools();
         _manager.Reschedule();
     }
 

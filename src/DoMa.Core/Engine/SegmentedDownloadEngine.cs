@@ -232,6 +232,8 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
             var take = run.Claim(segment, position, read);
             if (Limiter is not null)
                 await Limiter.WaitAsync(take, ct);
+            if (run.Job.Limiter is { } own)
+                await own.WaitAsync(take, ct);
             await WriteAsync(run.Handle, buffer.AsMemory(0, take), position, ct);
             position += take;
             if (run.Advance(segment, take))
@@ -289,6 +291,8 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         {
             if (Limiter is not null)
                 await Limiter.WaitAsync(read, run.PauseToken);
+            if (run.Job.Limiter is { } own)
+                await own.WaitAsync(read, run.PauseToken);
             await WriteAsync(run.Handle, buffer.AsMemory(0, read), position, run.PauseToken);
             position += read;
             run.Advance(segment, read);

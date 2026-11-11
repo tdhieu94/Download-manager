@@ -51,6 +51,9 @@ public sealed class BandwidthLimiter(Func<TimeSpan, CancellationToken, Task>? de
         return wait > TimeSpan.Zero ? _delay(wait, ct) : Task.CompletedTask;
     }
 
+    /// <summary>Mức chặt hơn trong hai giới hạn (byte/giây, 0 = không giới hạn).</summary>
+    public static long Tighter(long a, long b) => a <= 0 ? Math.Max(0, b) : b <= 0 ? a : Math.Min(a, b);
+
     private static Func<TimeSpan> StopwatchClock()
     {
         var sw = Stopwatch.StartNew();

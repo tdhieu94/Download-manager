@@ -80,9 +80,11 @@ public static class YtDlp
         ? ["--download-sections", $"*{options.ClipStart ?? 0}-{(options.ClipEnd is { } e ? e.ToString(CultureInfo.InvariantCulture) : "inf")}", "--force-keyframes-at-cuts"]
         : [];
 
-    public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null, MediaOptions? options = null) =>
+    public static IReadOnlyList<string> DownloadArguments(string url, string outputStem, string? ffmpegDir, string? cookieFile, string? denoPath = null, MediaOptions? options = null,
+        long limitBytesPerSec = 0) =>
     [
         "--no-playlist", "--no-warnings", "--encoding", "utf-8", "--newline", "--progress", "--no-mtime",
+        .. (limitBytesPerSec > 0 ? ["--limit-rate", limitBytesPerSec.ToString(CultureInfo.InvariantCulture)] : Array.Empty<string>()),
         .. FormatArguments(options),
         .. (ffmpegDir is null ? Array.Empty<string>() : ["--ffmpeg-location", ffmpegDir]),
         "-o", outputStem.Replace("%", "%%") + ".%(ext)s",

@@ -26,7 +26,7 @@ public sealed class TorrentDownloadEngine(YouTubeTools tools) : IDownloadEngine
         try
         {
             Directory.CreateDirectory(dir);
-            var args = Aria2.Arguments(job.Request.Url, dir, job.Request.Cookies, job.Request.Referrer, SpeedLimit?.Invoke());
+            var args = Aria2.Arguments(job.Request.Url, dir, job.Request.Cookies, job.Request.Referrer, BandwidthLimiter.Tighter(SpeedLimit?.Invoke() ?? 0, job.Limiter?.LimitBytesPerSec ?? 0));
             return await RunProcessAsync(args, dir, progress, pauseToken);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)

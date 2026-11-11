@@ -654,6 +654,98 @@ public sealed class DownloadManagerTests : IDisposable
         public override DateTimeOffset GetUtcNow() => _now;
     }
 
+    [Fact]
+    public void move_changes_which_queued_file_starts_next()
+    {
+        _settings.MaxConcurrent = 1;
+        var m = Manager();
+        m.Add(Req("https://h/a"), Target("a.bin"), true);
+        var b = m.Add(Req("https://h/b"), Target("b.bin"), true);
+        var c = m.Add(Req("https://h/c"), Target("c.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+        Assert.Equal(1, m.QueuePositions()[b.Id]);
+        Assert.Equal(2, m.QueuePositions()[c.Id]);
+
+        Assert.True(m.Move([c.Id], up: true));
+        Assert.Equal(1, m.QueuePositions()[c.Id]);
+        Assert.Equal(2, m.QueuePositions()[b.Id]);
+        Assert.False(m.Move([c.Id], up: true));
+
+        _engine.Finish("https://h/a", new EngineResult(EngineOutcome.Completed, Target("a.bin"), null));
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/c"));
+        Assert.Equal(DownloadStatus.Queued, StatusOf(m, b.Id));
+    }
+
+    [Fact]
+    public void move_down_skips_running_and_keeps_selection_order()
+    {
+        _settings.MaxConcurrent = 1;
+        var m = Manager();
+        var a = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        var b = m.Add(Req("https://h/b"), Target("b.bin"), true);
+        var c = m.Add(Req("https://h/c"), Target("c.bin"), true);
+        var d = m.Add(Req("https://h/d"), Target("d.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey("https://h/a"));
+
+        // Tệp đang tải không đổi chỗ; b và c cùng xuống một bậc, giữ thứ tự với nhau.
+        Assert.True(m.Move([a.Id, b.Id, c.Id], up: false));
+        var order = m.QueuePositions();
+        Assert.False(order.ContainsKey(a.Id));
+        Assert.Equal([d.Id, b.Id, c.Id], order.OrderBy(p => p.Value).Select(p => p.Key));
+        Assert.Equal(DownloadStatus.Downloading, StatusOf(m, a.Id));
+    }
+
+    [Fact]
+    public void speed_limit_reaches_engine_and_is_saved()
+    {
+        var m = Manager();
+        var item = m.Add(Req("https://h/a"), Target("a.bin"), true);
+        WaitUntil(() => _engine.Jobs.ContainsKey("https://h/a"));
+        var limiter = _engine.Jobs["https://h/a"].Limiter;
+        Assert.NotNull(limiter);
+        Assert.Equal(0, limiter.LimitBytesPerSec);
+
+        m.SetSpeedLimit([item.Id], 512);
+
+        Assert.Equal(512 * 1024L, limiter.LimitBytesPerSec);
+        Assert.Equal(1, _engine.Runs);
+        Assert.Equal(512, Manager().Items.Single().SpeedLimitKBps);
+    }
+
+    [Fact]
+    public void speed_limit_restarts_external_tool_downloads()
+    {
+        _settings.MaxConcurrent = 1;
+        var m = Manager();
+        const string magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+        var torrent = m.Add(Req(magnet), Target("t"), true);
+        m.Add(Req("https://h/b"), Target("b.bin"), true);
+        WaitUntil(() => _engine.Pending.ContainsKey(magnet));
+
+        m.SetSpeedLimit([torrent.Id], 1024);
+
+        // aria2c chỉ nhận giới hạn lúc chạy: tệp được chạy lại ngay, trước tệp b đang chờ.
+        WaitUntil(() => _engine.Runs == 2 && _engine.Pending.ContainsKey(magnet));
+        Assert.Equal(1024 * 1024L, _engine.Jobs[magnet].Limiter!.LimitBytesPerSec);
+        Assert.Equal(DownloadStatus.Queued, m.Items.Single(i => i.Request.Url == "https://h/b").Status);
+    }
+
+    [Fact]
+    public void global_limit_change_restarts_only_external_tool_downloads()
+    {
+        _settings.MaxConcurrent = 2;
+        var m = Manager();
+        const string video = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        m.Add(Req(video), Target("v.mp4"), true);
+        m.Add(Req("https://h/b"), Target("b.bin"), true);
+        WaitUntil(() => _engine.Pending.Count == 2);
+
+        m.ApplySpeedLimitToTools();
+
+        WaitUntil(() => _engine.Runs == 3 && _engine.Pending.ContainsKey(video));
+        Assert.True(_engine.Pending.ContainsKey("https://h/b"));
+    }
+
     private sealed class FakeEngine : IDownloadEngine
     {
         private int _runs;

@@ -39,6 +39,16 @@ public static class DownloadView
         return rest == 0 ? L.F("{0} giờ", hours) : L.F("{0} giờ {1} phút", hours, rest);
     }
 
+    /// <summary>Cột tốc độ: tốc độ hiện tại, kèm mức tối đa riêng nếu tệp có đặt (vd. "820 KB/s · ≤1 MB/s").</summary>
+    public static string SpeedText(double bytesPerSec, int limitKBps)
+    {
+        var speed = FormatSpeed(bytesPerSec);
+        if (limitKBps <= 0)
+            return speed;
+        var limit = "≤" + FormatSpeed(limitKBps * 1024.0);
+        return speed.Length == 0 ? limit : $"{speed} · {limit}";
+    }
+
     public static int Percent(long downloaded, long? total)
     {
         if (total is null or <= 0)
@@ -99,7 +109,8 @@ public static class DownloadView
         : t.TotalMinutes >= 1 ? L.F("{0} phút {1} giây", t.Minutes, t.Seconds)
         : L.F("{0} giây", Math.Max(1, t.Seconds));
 
-    public static string StatusText(DownloadItem item)
+    /// <param name="queuePosition">Thứ tự trong hàng chờ (1 = tải tiếp theo) nếu tệp đang chờ.</param>
+    public static string StatusText(DownloadItem item, int? queuePosition = null)
     {
         if (item.Threat is not null)
             return L.T("Có mã độc");
@@ -107,11 +118,11 @@ public static class DownloadView
             return item.ErrorMessage;
         var text = item.Status switch
         {
-            DownloadStatus.Queued => L.T("Đang chờ"),
+            DownloadStatus.Queued => queuePosition is { } n ? L.F("Đang chờ · thứ {0}", n) : L.T("Đang chờ"),
             DownloadStatus.Downloading => L.T("Đang tải"),
             DownloadStatus.Paused => L.T("Tạm dừng"),
             DownloadStatus.Later => L.T("Chờ tải sau"),
-            DownloadStatus.Completed => "Xong",
+            DownloadStatus.Completed => L.T("Xong"),
             _ => L.T("Lỗi"),
         };
         return !item.CanResume && item.Status is DownloadStatus.Downloading or DownloadStatus.Paused

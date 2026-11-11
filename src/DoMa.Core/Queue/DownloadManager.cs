@@ -22,6 +22,8 @@ public class DownloadManager
     private readonly List<DownloadItem> _items;
     private readonly Dictionary<Guid, Run> _running = [];
     private readonly HashSet<Guid> _restarting = [];
+    /// <summary>Tệp vừa bị dừng để chạy lại (vd. đổi giới hạn tốc độ): được chạy lại trước các tệp khác đang chờ.</summary>
+    private readonly HashSet<Guid> _preferred = [];
     private DateTimeOffset _lastPersist;
 
     public DownloadManager(
@@ -151,6 +153,100 @@ public class DownloadManager
             Persist();
             Pump();
         }
+    }
+
+    /// <summary>
+    /// Đưa các tệp đang chờ lên (hoặc xuống) một bậc trong hàng chờ. Chỉ đổi chỗ với các tệp chưa tải xong
+    /// và chưa chạy; tệp đang tải không bị ảnh hưởng. Trả về true nếu có thay đổi.
+    /// </summary>
+    public bool Move(IEnumerable<Guid> ids, bool up)
+    {
+        lock (_gate)
+        {
+            var selected = ids.ToHashSet();
+            var slots = Enumerable.Range(0, _items.Count).Where(i => IsWaiting(_items[i])).ToList();
+            if (!up)
+                slots.Reverse();
+            var moved = false;
+            for (var k = 1; k < slots.Count; k++)
+            {
+                var (before, here) = (slots[k - 1], slots[k]);
+                if (!selected.Contains(_items[here].Id) || selected.Contains(_items[before].Id))
+                    continue;
+                (_items[before], _items[here]) = (_items[here], _items[before]);
+                moved = true;
+            }
+            if (!moved)
+                return false;
+            Persist();
+            foreach (var item in Find(selected))
+                Raise(Changed, item);
+            return true;
+        }
+    }
+
+    private bool IsWaiting(DownloadItem item) =>
+        item.Status is DownloadStatus.Queued or DownloadStatus.Later or DownloadStatus.Paused or DownloadStatus.Failed
+        && !_running.ContainsKey(item.Id) && !_restarting.Contains(item.Id);
+
+    /// <summary>Thứ tự sẽ được tải của các tệp "Đang chờ" (1 = tải tiếp theo).</summary>
+    public IReadOnlyDictionary<Guid, int> QueuePositions()
+    {
+        lock (_gate)
+        {
+            var queued = _items.Where(i => i.Status == DownloadStatus.Queued && !_running.ContainsKey(i.Id) && !_restarting.Contains(i.Id)).ToList();
+            var order = queued.Where(i => _preferred.Contains(i.Id)).Concat(queued.Where(i => !_preferred.Contains(i.Id)));
+            var positions = new Dictionary<Guid, int>();
+            foreach (var item in order)
+                positions[item.Id] = positions.Count + 1;
+            return positions;
+        }
+    }
+
+    /// <summary>
+    /// Đặt tốc độ tối đa riêng cho các tệp (KB/s, 0 = bỏ giới hạn riêng). Tệp đang tải bằng luồng của DoMa đổi tốc độ ngay;
+    /// tệp tải bằng yt-dlp hoặc aria2c được dừng rồi chạy lại ngay (không mất phần đã tải) để áp mức mới.
+    /// </summary>
+    public void SetSpeedLimit(IEnumerable<Guid> ids, int kbps)
+    {
+        kbps = Math.Max(0, kbps);
+        lock (_gate)
+        {
+            var changed = false;
+            foreach (var item in Find(ids))
+            {
+                if (item.Status == DownloadStatus.Completed || item.SpeedLimitKBps == kbps)
+                    continue;
+                item.SpeedLimitKBps = kbps;
+                changed = true;
+                if (_running.TryGetValue(item.Id, out var run) && !run.Cts.IsCancellationRequested)
+                {
+                    run.Limiter.LimitBytesPerSec = kbps * 1024L;
+                    if (Engine.Hls.MediaAwareEngine.UsesExternalTool(item.Request))
+                        Requeue(run);
+                }
+                Raise(Changed, item);
+            }
+            if (changed)
+                Persist();
+        }
+    }
+
+    /// <summary>Giới hạn tốc độ chung vừa đổi: chạy lại các tệp đang tải bằng yt-dlp/aria2c để chúng theo mức mới.</summary>
+    public void ApplySpeedLimitToTools()
+    {
+        lock (_gate)
+        {
+            foreach (var run in _running.Values.Where(r => !r.Removed && !r.Cts.IsCancellationRequested && Engine.Hls.MediaAwareEngine.UsesExternalTool(r.Item.Request)).ToList())
+                Requeue(run);
+        }
+    }
+
+    private void Requeue(Run run)
+    {
+        run.ResumeRequested = true;
+        _preferred.Add(run.Item.Id);
+        run.Cts.Cancel();
     }
 
     /// <summary>Số lần tự tải tiếp tối đa cho một tệp sau lỗi mạng (sau đó chờ người dùng bấm).</summary>
@@ -336,6 +432,7 @@ public class DownloadManager
             foreach (var item in Find(ids))
             {
                 _items.Remove(item);
+                _preferred.Remove(item.Id);
                 item.Request = item.Request with { Cookies = null };
                 _running.TryGetValue(item.Id, out var run);
                 if (run is not null)
@@ -512,9 +609,11 @@ public class DownloadManager
         var max = Math.Max(1, _settings().MaxConcurrent);
         while (_running.Count < max)
         {
-            var next = _items.FirstOrDefault(i => i.Status == DownloadStatus.Queued && !_restarting.Contains(i.Id));
+            var next = _items.FirstOrDefault(i => i.Status == DownloadStatus.Queued && !_restarting.Contains(i.Id) && _preferred.Contains(i.Id))
+                ?? _items.FirstOrDefault(i => i.Status == DownloadStatus.Queued && !_restarting.Contains(i.Id));
             if (next is null)
                 return;
+            _preferred.Remove(next.Id);
             next.Status = DownloadStatus.Downloading;
             next.ErrorMessage = null;
             var run = new Run(this, next);
@@ -563,7 +662,7 @@ public class DownloadManager
                 }
                 else
                 {
-                    var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe, refreshed);
+                    var job = new DownloadJob(run.Item.Request, run.Item.TargetPath, StatePath(run.Item), _settings().ConnectionsPerFile, probe, refreshed, run.Limiter);
                     result = await _engine.RunAsync(job, run, run.Cts.Token);
                 }
             }
@@ -693,6 +792,7 @@ public class DownloadManager
         public DownloadItem Item { get; } = item;
         public CancellationTokenSource Cts { get; } = new();
         public Queue<(DateTimeOffset At, long Bytes)> Samples { get; } = new();
+        public BandwidthLimiter Limiter { get; } = new() { LimitBytesPerSec = item.SpeedLimitKBps * 1024L };
         public Task Task { get; set; } = Task.CompletedTask;
         public bool Removed { get; set; }
         public bool ResumeRequested { get; set; }

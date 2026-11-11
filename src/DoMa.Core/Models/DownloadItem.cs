@@ -24,6 +24,9 @@ public class DownloadItem
     public int AutoRetries { get; set; }
     public DateTimeOffset? NextAutoRetry { get; set; }
 
+    /// <summary>Tốc độ tối đa riêng cho tệp này, KB/s (0 = chỉ theo giới hạn chung).</summary>
+    public int SpeedLimitKBps { get; set; }
+
     public DateTimeOffset AddedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
 }

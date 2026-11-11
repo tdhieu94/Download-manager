@@ -202,6 +202,12 @@ public sealed class MainForm : Form
             case Keys.Control | Keys.O when _grid.Focused:
                 ForFirst(i => OpenFolder(i.TargetPath));
                 return true;
+            case Keys.Control | Keys.Up when _grid.Focused:
+                MoveSelected(up: true);
+                return true;
+            case Keys.Control | Keys.Down when _grid.Focused:
+                MoveSelected(up: false);
+                return true;
             case Keys.Control | Keys.A when _grid.Focused:
                 _grid.SelectAll();
                 return true;
@@ -639,10 +645,11 @@ public sealed class MainForm : Form
                 2 => new ProgressValue(
                     item.Status == DownloadStatus.Completed ? 100 : DownloadView.Percent(item.DownloadedBytes, item.TotalBytes),
                     Theme.StatusColor(item)),
-                3 => DownloadView.FormatSpeed(_manager.SpeedBytesPerSec(item.Id)),
+                3 => DownloadView.SpeedText(item.Status == DownloadStatus.Downloading ? _manager.SpeedBytesPerSec(item.Id) : 0,
+                    item.Status == DownloadStatus.Completed ? 0 : item.SpeedLimitKBps),
                 4 => DownloadView.FormatEta(_manager.Eta(item.Id)),
                 5 => DownloadView.TimeText(item),
-                _ => DownloadView.StatusText(item),
+                _ => DownloadView.StatusText(item, QueuePosition(item)),
             };
         };
         _grid.CellFormatting += (_, e) =>
@@ -660,7 +667,9 @@ public sealed class MainForm : Form
             e.ToolTipText = e.ColumnIndex switch
             {
                 5 => DownloadView.TimeTooltip(item),
-                6 => DownloadView.StatusText(item),
+                3 when item.SpeedLimitKBps > 0 && item.Status != DownloadStatus.Completed
+                    => L.F("Tốc độ tối đa riêng cho tệp này: {0}", DownloadView.FormatSpeed(item.SpeedLimitKBps * 1024.0)),
+                6 => DownloadView.StatusText(item, QueuePosition(item)),
                 _ => "",
             };
         };
@@ -811,6 +820,28 @@ public sealed class MainForm : Form
             var ids = SelectedIds();
             RunLogged(() => _manager.StartFirst(ids));
         });
+        var moveUp = ThemedRenderer.Item(menu, L.T("Đưa lên trong hàng chờ"), IconKind.ArrowUp, (_, _) => MoveSelected(up: true));
+        moveUp.ShortcutKeyDisplayString = "Ctrl+↑";
+        var moveDown = ThemedRenderer.Item(menu, L.T("Đưa xuống trong hàng chờ"), IconKind.ArrowDown, (_, _) => MoveSelected(up: false));
+        moveDown.ShortcutKeyDisplayString = "Ctrl+↓";
+        var limit = ThemedRenderer.Item(menu, L.T("Giới hạn tốc độ tệp này"), IconKind.Gauge, (_, _) => { });
+        foreach (var (kbps, text) in SpeedPresets)
+        {
+            var option = new ToolStripMenuItem(kbps == 0 ? L.T("Không giới hạn riêng") : text) { Tag = kbps, Padding = new Padding(4, 4, 4, 4) };
+            option.Click += (_, _) =>
+            {
+                var ids = SelectedIds();
+                RunLogged(() => _manager.SetSpeedLimit(ids, kbps));
+            };
+            limit.DropDownItems.Add(option);
+        }
+        if (limit.DropDown is ToolStripDropDownMenu limitMenu)
+        {
+            limitMenu.ShowCheckMargin = true;
+            limitMenu.ShowImageMargin = false;
+            limitMenu.Renderer = menu.Renderer;
+            limitMenu.BackColor = menu.BackColor;
+        }
         var refresh = ThemedRenderer.Item(menu, L.T("Làm mới link…"), IconKind.Link, (_, _) => ForFirst(RefreshLink));
         ThemedRenderer.Item(menu, L.T("Tải lại"), IconKind.Refresh, (_, _) =>
         {
@@ -838,6 +869,11 @@ public sealed class MainForm : Form
             mp3.Enabled = done;
             rename.Enabled = first is { Status: not DownloadStatus.Downloading };
             startFirst.Visible = SelectedIds().Any(id => _manager.Items.FirstOrDefault(i => i.Id == id) is { Status: not (DownloadStatus.Completed or DownloadStatus.Downloading) });
+            var waiting = SelectedIds().Any(id => _manager.Items.FirstOrDefault(i => i.Id == id) is { Status: DownloadStatus.Queued or DownloadStatus.Later or DownloadStatus.Paused or DownloadStatus.Failed });
+            moveUp.Visible = moveDown.Visible = waiting;
+            limit.Visible = first is not null && first.Status != DownloadStatus.Completed;
+            foreach (ToolStripMenuItem option in limit.DropDownItems)
+                option.Checked = first is not null && (int)option.Tag! == first.SpeedLimitKBps;
             refresh.Visible = first is not null && first.Status != DownloadStatus.Completed;
             refresh.Enabled = first is { Status: not DownloadStatus.Downloading };
         };
@@ -1086,6 +1122,21 @@ public sealed class MainForm : Form
         }
     }
 
+    private IReadOnlyDictionary<Guid, int> _queuePositions = new Dictionary<Guid, int>();
+
+    private int? QueuePosition(DownloadItem item) =>
+        item.Status == DownloadStatus.Queued && _queuePositions.TryGetValue(item.Id, out var n) ? n : null;
+
+    /// <summary>Đưa các tệp đang chờ đã chọn lên/xuống một bậc trong thứ tự tải.</summary>
+    private void MoveSelected(bool up)
+    {
+        var ids = SelectedIds();
+        if (ids.Count == 0)
+            return;
+        // Move báo Changed nên danh sách tự vẽ lại với thứ tự mới.
+        RunLogged(() => _manager.Move(ids, up));
+    }
+
     private List<Guid> SelectedIds() =>
         _grid.SelectedRows.Cast<DataGridViewRow>()
             .Where(r => r.Index < _view.Count)
@@ -1118,6 +1169,7 @@ public sealed class MainForm : Form
         if (!Visible && !_dirty)
             return;
         var items = _manager.Items;
+        _queuePositions = _manager.QueuePositions();
         foreach (var entry in _nav.Items)
         {
             if (entry.Filter is { } filter)

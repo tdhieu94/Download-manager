@@ -12,6 +12,9 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
 {
     private static string NotReady => L.T("Chưa có công cụ tải YouTube. Hãy tải lại video từ trình duyệt để DoMa cài công cụ.");
 
+    /// <summary>Giới hạn tốc độ chung hiện tại (byte/giây, 0 = không giới hạn).</summary>
+    public Func<long>? SpeedLimit { get; init; }
+
     public async Task<EngineResult> RunAsync(DownloadJob job, IProgress<EngineProgress> progress, CancellationToken pauseToken)
     {
         if (!File.Exists(tools.YtDlpPath))
@@ -23,7 +26,8 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!);
             var stem = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(job.TargetPath))!, Path.GetFileNameWithoutExtension(job.TargetPath));
             var ffmpeg = File.Exists(tools.FfmpegPath) ? tools.Folder : null;
-            var args = YtDlp.DownloadArguments(url, stem, ffmpeg, cookieFile, Deno(), job.Request.Media);
+            var limit = BandwidthLimiter.Tighter(SpeedLimit?.Invoke() ?? 0, job.Limiter?.LimitBytesPerSec ?? 0);
+            var args = YtDlp.DownloadArguments(url, stem, ffmpeg, cookieFile, Deno(), job.Request.Media, limit);
             return await RunProcessAsync(args, job, progress, pauseToken);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)

@@ -98,6 +98,8 @@ public sealed class HlsDownloadEngine(HttpClient http, Func<TimeSpan, Cancellati
                     queue.Enqueue(FetchUnitAsync(job.Request, unit.Uri, unit.Segment, keys, ct));
                 }
                 var data = await queue.Dequeue();
+                if (job.Limiter is { } own)
+                    await own.WaitAsync(data.Length, ct);
                 await file.WriteAsync(data, ct);
                 await file.FlushAsync(ct);
                 state.Done++;
@@ -280,6 +282,12 @@ public sealed class MediaAwareEngine(IDownloadEngine files, IDownloadEngine hls,
             ? hls.RunAsync(job, progress, pauseToken)
             : files.RunAsync(job, progress, pauseToken);
     }
+
+    /// <summary>
+    /// Tải bằng công cụ ngoài (yt-dlp, aria2c): giới hạn tốc độ chỉ đặt được lúc bắt đầu, nên muốn đổi thì phải chạy lại.
+    /// </summary>
+    public static bool UsesExternalTool(DownloadRequest request) =>
+        Torrent.TorrentLink.IsTorrent(request.Url, request.Mime) || YouTube.MediaLink.IsVideo(request.Url);
 
     /// <summary>Video dạng luồng (HLS, YouTube): chưa biết chính xác dung lượng, tải tiếp được theo cách riêng.</summary>
     public static bool IsStream(string url, string? contentType) =>

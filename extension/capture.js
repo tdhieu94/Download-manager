@@ -314,7 +314,7 @@ export function pageEntries(pageUrl, title) {
   const playlist = youtubePlaylistUrl(pageUrl);
   if (playlist) {
     entries.push({ url: playlist, kind: "playlist", site: "YouTube", mime: null, size: null,
-      name: video ? "Cả playlist chứa video này" : clean || "Playlist YouTube", pageUrl: playlist, at: Date.now() });
+      name: video ? t("Cả playlist chứa video này", "Whole playlist of this video") : clean || t("Playlist YouTube", "YouTube playlist"), pageUrl: playlist, at: Date.now() });
   }
   return entries;
 }
