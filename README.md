@@ -26,7 +26,7 @@
 - **Tải tiếp khi bị ngắt.** Mất mạng, tắt app hay tắt máy đều tải tiếp được (khi máy chủ hỗ trợ `Range`).
 - **Bắt video trên trang và tải YouTube, Facebook, TikTok, Instagram, X.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video từ các trang này được tải ở độ phân giải cao nhất mà video có (1080p, 2K, 4K…), ghép sẵn thành `.mp4`. Bạn có thể chọn độ phân giải thấp hơn, chỉ tải âm thanh thành `.mp3`, hoặc tải kèm phụ đề tiếng Việt/tiếng Anh.
 - **Tải cả playlist hoặc kênh YouTube.** Chuột phải trên trang playlist/kênh › "Tải cả playlist/kênh này bằng DoMa…", rồi tích chọn các video muốn tải.
-- **Tải nhiều link một lượt.** Dán nhiều link vào cửa sổ DoMa (Ctrl+V), kéo thả, hoặc nhập danh sách link từ tệp `.txt`.
+- **Tải nhiều link một lượt.** Dán nhiều link vào cửa sổ DoMa (Ctrl+V), kéo thả, nhập danh sách link từ tệp `.txt`, hoặc viết theo mẫu như `anh[001-100].jpg`.
 - **Cắt đoạn và theo dõi kênh.** Chỉ tải một đoạn video (từ phút X đến phút Y), hoặc theo dõi kênh YouTube để DoMa tự tải video mới.
 - **Tải torrent và link magnet** bằng công cụ mã nguồn mở aria2 (DoMa không chia sẻ lại sau khi tải xong).
 - **Đổi định dạng** video đã tải sang MP4 hoặc tách nhạc MP3, và **kiểm tra mã băm** MD5/SHA-256.

@@ -959,6 +959,8 @@ public sealed class MainForm : Form
     private static List<string> ExtractLinks(string? text) =>
         (text ?? "").Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
             .Select(t => t.Trim().Trim('"', '<', '>'))
+            // Link theo mẫu, vd. "https://site/anh[001-100].jpg", được mở thành từng link.
+            .SelectMany(t => t.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? Core.Files.LinkPattern.Expand(t, Core.Files.BatchLinks.MaxLinks) : [t])
             .Where(t => (Uri.TryCreate(t, UriKind.Absolute, out var u) && u.Scheme is "http" or "https") || Core.Engine.Torrent.TorrentLink.IsMagnet(t))
             .Distinct()
             .Take(Core.Files.BatchLinks.MaxLinks)
@@ -1009,7 +1011,7 @@ public sealed class MainForm : Form
     private List<string> PromptLinks()
     {
         using var dialog = new AddLinkForm(
-            hint: L.T("Dán một hoặc nhiều link http/https hoặc magnet, cách nhau bởi dấu cách. Có thể nhập từ tệp .txt."),
+            hint: L.T("Dán một hoặc nhiều link http/https hoặc magnet, cách nhau bởi dấu cách. Tải hàng loạt theo mẫu: …/anh[001-100].jpg."),
             secondaryText: L.T("Nhập từ tệp .txt…"));
         var answer = dialog.ShowDialog(this);
         if (answer == DialogResult.Retry)

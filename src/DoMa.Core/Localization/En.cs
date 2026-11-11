@@ -102,6 +102,7 @@ public static class En
         ["Lịch từ {0:HH\\:mm}"] = "Schedule from {0:HH\\:mm}",
         ["Xong sẽ cho máy ngủ"] = "Will sleep when done",
         ["Xong"] = "Done",
+        ["Dán một hoặc nhiều link http/https hoặc magnet, cách nhau bởi dấu cách. Tải hàng loạt theo mẫu: …/anh[001-100].jpg."] = "Paste one or more http/https or magnet links, separated by spaces. Batch by pattern: …/img[001-100].jpg.",
         ["Máy chủ đang bận (lỗi {0}). DoMa sẽ tự thử lại sau"] = "The server is busy (error {0}). DoMa will retry automatically",
         ["Tìm theo tên file hoặc trang web  (Ctrl+F)"] = "Search by file name or website  (Ctrl+F)",
         ["Tệp này không phải bản sao lưu của DoMa."] = "This file is not a DoMa backup.",
