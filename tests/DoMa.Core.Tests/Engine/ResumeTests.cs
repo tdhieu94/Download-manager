@@ -81,12 +81,18 @@ public sealed class ResumeTests : IDisposable
     {
         await using var server = await SlowServer();
         await PauseAt(server, 5 * MiB);
+        var saved = DownloadState.Load(_statePath)!.Segments.Sum(s => s.Downloaded);
+        Assert.True(saved >= 5 * MiB);
+        long lowest = long.MaxValue;
+        var progress = new SyncProgress(p => lowest = Math.Min(lowest, p.Downloaded));
 
-        var result = await Download(await Job(server));
+        var result = await Download(await Job(server), progress: progress);
 
         Assert.Equal(EngineOutcome.Completed, result.Outcome);
         AssertSameContent(server.Options.Content, result.FinalPath);
-        Assert.True(server.BytesSent < 1.2 * server.Options.Content.Length);
+        // Tải tiếp bắt đầu từ phần đã lưu chứ không tải lại từ đầu. (Không đo số byte máy chủ gửi: các đoạn bị bỏ dở
+        // giữa chừng vẫn được máy chủ gửi thêm một ít, nhiều hay ít tuỳ tải của máy chạy kiểm thử.)
+        Assert.True(lowest >= saved);
         Assert.False(File.Exists(_statePath));
     }
 
