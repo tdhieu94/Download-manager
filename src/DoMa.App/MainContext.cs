@@ -20,7 +20,7 @@ internal sealed class MainContext : ApplicationContext
 
     private readonly SettingsStore _settingsStore = new(AppPaths.DataDir);
     private readonly ErrorLog _log = new(AppPaths.DataDir);
-    private readonly HttpClient _http = HttpClientFactory.Create();
+    private readonly HttpClient _http;
     private readonly Dictionary<Guid, DownloadStatus> _lastStatus = [];
     private readonly DownloadManager _manager;
     private readonly CaptureCoordinator _coordinator;
@@ -46,13 +46,14 @@ internal sealed class MainContext : ApplicationContext
         Directory.CreateDirectory(AppPaths.DataDir);
         Directory.CreateDirectory(AppPaths.StatesDir);
         _settings = _settingsStore.Load();
+        _http = HttpClientFactory.Create(() => _settings.Proxy);
         L.Use(_settings.Language);
         _limiter.LimitBytesPerSec = _settings.SpeedLimitKBps * 1024L;
         Theme.Use(Enum.TryParse<ThemeMode>(_settings.Appearance, true, out var mode) ? mode : ThemeMode.System);
 
         var ui = _ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
-        _ytTools = new Core.Engine.YouTube.YouTubeTools(Path.Combine(AppPaths.DataDir, "tools"), _http);
+        _ytTools = new Core.Engine.YouTube.YouTubeTools(Path.Combine(AppPaths.DataDir, "tools"), _http) { Proxy = () => _settings.Proxy };
         _ytEngine = new Core.Engine.YouTube.YouTubeDownloadEngine(_ytTools) { SpeedLimit = () => _limiter.LimitBytesPerSec };
 
         var prober = new LinkProber(_http);

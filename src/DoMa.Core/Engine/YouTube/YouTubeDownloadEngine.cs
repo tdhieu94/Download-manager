@@ -218,6 +218,7 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             info.ArgumentList.Add(a);
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         info.Environment["PYTHONUTF8"] = "1";
+        tools.ApplyProxy(info);
         return Process.Start(info) ?? throw new IOException(L.T("yt-dlp không khởi động được."));
     }
 

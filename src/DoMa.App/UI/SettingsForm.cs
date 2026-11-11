@@ -15,6 +15,7 @@ public sealed class SettingsForm : Form
     private readonly NumericUpDown _connections = new() { Minimum = 1, Maximum = 32 };
     private readonly NumericUpDown _concurrent = new() { Minimum = 1, Maximum = 10 };
     private readonly NumericUpDown _speed = new() { Minimum = 0, Maximum = 1_000_000, Increment = 256, ThousandsSeparator = true };
+    private readonly InputBox _proxy = new(IconKind.Link) { PlaceholderText = L.T("Để trống = theo Windows") };
     private readonly ToggleSwitch _schedule = new(L.T("Tải theo lịch hằng ngày"), L.T("Tự bắt đầu các tệp “Chờ tải sau” vào giờ hẹn, tự đưa về hàng chờ khi tới giờ dừng"));
     private readonly InputBox _scheduleStart = new(IconKind.Clock) { PlaceholderText = "23:00" };
     private readonly InputBox _scheduleStop = new(IconKind.Clock) { PlaceholderText = L.T("Để trống = không dừng") };
@@ -110,6 +111,9 @@ public sealed class SettingsForm : Form
         body.Controls.AddRange([connCaption, concCaption, _connections, _concurrent]);
         y += S(50);
 
+        Section(L.T("Mạng"));
+        Field(L.T("Proxy (ví dụ http://127.0.0.1:8080 hoặc socks5://127.0.0.1:1080)"), _proxy);
+
         Section(L.T("Tốc độ và lịch tải"));
         StyleNumber(_speed);
         var speedCaption = DialogParts.FieldLabel(L.T("Tốc độ tối đa, KB/s (0 = không giới hạn)"));
@@ -200,6 +204,7 @@ public sealed class SettingsForm : Form
         _extract.Checked = current.AutoExtractZip;
         _mp4.Checked = current.ConvertTsToMp4;
         _speed.Value = Math.Clamp(current.SpeedLimitKBps, 0, 1_000_000);
+        _proxy.Text = current.Proxy;
         _schedule.Checked = current.ScheduleEnabled;
         _scheduleStart.Text = current.ScheduleStart;
         _scheduleStop.Text = current.ScheduleStop ?? "";
@@ -213,6 +218,13 @@ public sealed class SettingsForm : Form
                 MessageBox.Show(this, L.T("Thư mục gốc không hợp lệ."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
                 _root.Box.Focus();
+                return;
+            }
+            if (!Core.Engine.ProxyConfig.IsValid(_proxy.Text))
+            {
+                MessageBox.Show(this, L.T("Proxy không hợp lệ. Hãy nhập dạng máy:cổng, ví dụ 127.0.0.1:8080 hoặc socks5://127.0.0.1:1080."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                _proxy.Box.Focus();
                 return;
             }
             if (_schedule.Checked && !ScheduleClock.TryParse(_scheduleStart.Text, out _))
@@ -247,28 +259,36 @@ public sealed class SettingsForm : Form
         var extensions = _source.Extensions.ToDictionary(p => p.Key, p => p.Value);
         foreach (var category in Listed)
             extensions[category] = ParseExtensions(_extensions[category].Text);
-        return new Settings
+        // Bắt đầu từ cài đặt hiện tại để giữ những mục không có trong hộp này (vd. chất lượng video đã chọn lần trước).
+        var result = _source.Clone();
+        Apply(result, extensions);
+        return result;
+    }
+
+    private void Apply(Settings s, Dictionary<Category, string[]> extensions)
+    {
         {
-            RootFolder = _root.Text.Trim(),
-            Extensions = extensions,
-            ConnectionsPerFile = (int)_connections.Value,
-            MaxConcurrent = (int)_concurrent.Value,
-            RunAtStartup = _startup.Checked,
-            NotifyOnComplete = _notify.Checked,
-            WatchClipboard = _clipboard.Checked,
-            AutoResumeOnNetwork = _network.Checked,
-            AutoCheckUpdates = _updates.Checked,
-            SpeedLimitKBps = (int)_speed.Value,
-            WarnBeforeDownload = _warn.Checked,
-            ScanAfterDownload = _scan.Checked,
-            AutoExtractZip = _extract.Checked,
-            ConvertTsToMp4 = _mp4.Checked,
-            Appearance = Appearances[Math.Max(0, _appearance.SelectedIndex)].Value,
-            Language = Languages[Math.Max(0, _language.SelectedIndex)].Value,
-            ScheduleEnabled = _schedule.Checked,
-            ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart,
-            ScheduleStop = _scheduleStop.Text.Trim().Length > 0 ? _scheduleStop.Text.Trim() : null,
-        };
+            s.RootFolder = _root.Text.Trim();
+            s.Extensions = extensions;
+            s.ConnectionsPerFile = (int)_connections.Value;
+            s.MaxConcurrent = (int)_concurrent.Value;
+            s.RunAtStartup = _startup.Checked;
+            s.NotifyOnComplete = _notify.Checked;
+            s.WatchClipboard = _clipboard.Checked;
+            s.AutoResumeOnNetwork = _network.Checked;
+            s.AutoCheckUpdates = _updates.Checked;
+            s.SpeedLimitKBps = (int)_speed.Value;
+            s.WarnBeforeDownload = _warn.Checked;
+            s.ScanAfterDownload = _scan.Checked;
+            s.AutoExtractZip = _extract.Checked;
+            s.ConvertTsToMp4 = _mp4.Checked;
+            s.Appearance = Appearances[Math.Max(0, _appearance.SelectedIndex)].Value;
+            s.Language = Languages[Math.Max(0, _language.SelectedIndex)].Value;
+            s.ScheduleEnabled = _schedule.Checked;
+            s.ScheduleStart = _scheduleStart.Text.Trim().Length > 0 ? _scheduleStart.Text.Trim() : _source.ScheduleStart;
+            s.ScheduleStop = _scheduleStop.Text.Trim().Length > 0 ? _scheduleStop.Text.Trim() : null;
+            s.Proxy = _proxy.Text.Trim();
+        }
     }
 
     public static string[] ParseExtensions(string text) =>

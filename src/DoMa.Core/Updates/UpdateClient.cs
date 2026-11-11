@@ -10,10 +10,12 @@ public sealed class UpdateClient : IDisposable
 
     readonly HttpClient _http;
 
-    public UpdateClient(Version currentVersion)
+    /// <param name="proxy">Đọc địa chỉ proxy trong cài đặt (trống = theo Windows).</param>
+    public UpdateClient(Version currentVersion, Func<string?>? proxy = null)
     {
         _http = new HttpClient(new SocketsHttpHandler
         {
+            Proxy = Engine.ProxyConfig.Dynamic(proxy ?? (() => null)),
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = 5,
             ConnectTimeout = TimeSpan.FromSeconds(20),

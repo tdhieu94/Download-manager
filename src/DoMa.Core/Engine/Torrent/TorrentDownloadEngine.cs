@@ -48,6 +48,7 @@ public sealed class TorrentDownloadEngine(YouTubeTools tools) : IDownloadEngine
         };
         foreach (var a in args)
             info.ArgumentList.Add(a);
+        tools.ApplyProxy(info, httpOnly: true);
         using var process = Process.Start(info) ?? throw new IOException(L.T("aria2c không khởi động được."));
         var tail = new Queue<string>();
         void Keep(string line)

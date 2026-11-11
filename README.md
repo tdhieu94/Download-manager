@@ -21,6 +21,7 @@
 - **Bắt lượt tải từ trình duyệt.** Bấm tải trên Chrome hoặc Edge, DoMa nhận link ngay, kèm cookie, referer và user-agent, nên tải được cả link cần đăng nhập hoặc link có token hết hạn.
 - **Tải nhanh, nhiều kết nối.** Mỗi file được chia đoạn và tải song song (mặc định 16 kết nối, chỉnh được từ 1 đến 32).
 - **Giới hạn tốc độ và sắp xếp hàng chờ.** Đặt tốc độ tối đa chung hoặc riêng cho từng tệp, và đưa tệp đang chờ lên/xuống (`Ctrl+↑`, `Ctrl+↓`) để chọn tệp nào tải trước.
+- **Tải qua proxy.** Dùng proxy của Windows, hoặc đặt proxy HTTP/SOCKS5 riêng trong Cài đặt.
 - **Tải tiếp khi bị ngắt.** Mất mạng, tắt app hay tắt máy đều tải tiếp được (khi máy chủ hỗ trợ `Range`).
 - **Bắt video trên trang và tải YouTube, Facebook, TikTok, Instagram, X.** Tiện ích liệt kê video đang phát (kể cả luồng HLS). Video từ các trang này được tải ở độ phân giải cao nhất mà video có (1080p, 2K, 4K…), ghép sẵn thành `.mp4`. Bạn có thể chọn độ phân giải thấp hơn, chỉ tải âm thanh thành `.mp3`, hoặc tải kèm phụ đề tiếng Việt/tiếng Anh.
 - **Tải cả playlist hoặc kênh YouTube.** Chuột phải trên trang playlist/kênh › "Tải cả playlist/kênh này bằng DoMa…", rồi tích chọn các video muốn tải.

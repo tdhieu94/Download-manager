@@ -372,6 +372,8 @@ public sealed class MainForm : Form
             if (quick.StartLaterNow() == 0)
                 MessageBox.Show(this, L.T("Hàng “Chờ tải sau” đang trống."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }));
+        var failed = _manager.Items.Where(i => i.Status == DownloadStatus.Failed).Select(i => i.Id).ToList();
+        menu.Items.Add(new ToolStripMenuItem(L.F("Thử lại các tệp lỗi ({0})", failed.Count), null, (_, _) => RunLogged(() => _manager.Resume(failed))) { Enabled = failed.Count > 0 });
         menu.Items.Add(new ToolStripMenuItem(L.T("Hẹn giờ tải tự động…"), null, (_, _) => _openSettings()));
         menu.Items.Add(new ToolStripMenuItem(L.T("Dọn tệp đã tải xong khỏi danh sách…"), null, (_, _) => ClearCompleted()));
         if (quick.ManageChannels is { } channels)
@@ -835,6 +837,17 @@ public sealed class MainForm : Form
             };
             limit.DropDownItems.Add(option);
         }
+        var customLimit = new ToolStripMenuItem(L.T("Mức khác…")) { Padding = new Padding(4, 4, 4, 4) };
+        customLimit.Click += (_, _) => ForFirst(first =>
+        {
+            var ids = SelectedIds();
+            using var dialog = new SpeedLimitForm(first.SpeedLimitKBps);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+            var kbps = dialog.KBps;
+            RunLogged(() => _manager.SetSpeedLimit(ids, kbps));
+        });
+        limit.DropDownItems.Add(customLimit);
         if (limit.DropDown is ToolStripDropDownMenu limitMenu)
         {
             limitMenu.ShowCheckMargin = true;
@@ -872,8 +885,18 @@ public sealed class MainForm : Form
             var waiting = SelectedIds().Any(id => _manager.Items.FirstOrDefault(i => i.Id == id) is { Status: DownloadStatus.Queued or DownloadStatus.Later or DownloadStatus.Paused or DownloadStatus.Failed });
             moveUp.Visible = moveDown.Visible = waiting;
             limit.Visible = first is not null && first.Status != DownloadStatus.Completed;
+            var isPreset = false;
             foreach (ToolStripMenuItem option in limit.DropDownItems)
-                option.Checked = first is not null && (int)option.Tag! == first.SpeedLimitKBps;
+            {
+                if (option.Tag is not int kbps)
+                    continue;
+                option.Checked = first is not null && kbps == first.SpeedLimitKBps;
+                isPreset |= option.Checked;
+            }
+            customLimit.Checked = first is not null && !isPreset;
+            customLimit.Text = customLimit.Checked
+                ? L.F("Mức khác… ({0})", DownloadView.FormatSpeed(first!.SpeedLimitKBps * 1024.0))
+                : L.T("Mức khác…");
             refresh.Visible = first is not null && first.Status != DownloadStatus.Completed;
             refresh.Enabled = first is { Status: not DownloadStatus.Downloading };
         };

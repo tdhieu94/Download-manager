@@ -49,6 +49,30 @@ public static class DownloadView
         return speed.Length == 0 ? limit : $"{speed} · {limit}";
     }
 
+    /// <summary>
+    /// Đọc mức tốc độ người dùng gõ: "750" hoặc "750 KB" là KB/s, "1.5 MB" (hay "1,5m") là MB/s.
+    /// Trống = 0 (không giới hạn); null nếu không đọc được.
+    /// </summary>
+    public static int? ParseSpeedKBps(string? text)
+    {
+        var value = (text ?? "").Trim().ToLowerInvariant().Replace("/s", "").Replace(',', '.').Trim();
+        if (value.Length == 0)
+            return 0;
+        var scale = 1.0;
+        foreach (var (suffix, factor) in new[] { ("mb", 1024.0), ("kb", 1.0), ("m", 1024.0), ("k", 1.0) })
+        {
+            if (!value.EndsWith(suffix, StringComparison.Ordinal))
+                continue;
+            scale = factor;
+            value = value[..^suffix.Length].Trim();
+            break;
+        }
+        if (!double.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number))
+            return null;
+        var kbps = number * scale;
+        return kbps is >= 0 and <= 10_000_000 ? (int)Math.Round(kbps) : null;
+    }
+
     public static int Percent(long downloaded, long? total)
     {
         if (total is null or <= 0)

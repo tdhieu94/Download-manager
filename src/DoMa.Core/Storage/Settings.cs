@@ -22,6 +22,9 @@ public class Settings
     /// <summary>Tốc độ tối đa cho tất cả lượt tải, KB/s (0 = không giới hạn).</summary>
     public int SpeedLimitKBps { get; set; }
 
+    /// <summary>Proxy cho mọi lượt tải, vd. "http://127.0.0.1:8080" hoặc "socks5://127.0.0.1:1080"; trống = theo Windows.</summary>
+    public string Proxy { get; set; } = "";
+
     /// <summary>Khi copy một link tải (vd. .zip, .exe, .mp4), hiện thông báo đề nghị tải bằng DoMa.</summary>
     public bool WatchClipboard { get; set; } = true;
 

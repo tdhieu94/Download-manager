@@ -143,4 +143,16 @@ public class DownloadViewTests
         Assert.Equal("≤1 MB/s", DownloadView.SpeedText(0, 1024));
         Assert.Equal("512 KB/s · ≤1 MB/s", DownloadView.SpeedText(512 * 1024, 1024));
     }
+
+    [Theory]
+    [InlineData("", 0)]
+    [InlineData("750", 750)]
+    [InlineData(" 750 KB/s ", 750)]
+    [InlineData("1.5 MB", 1536)]
+    [InlineData("1,5m", 1536)]
+    [InlineData("2MB/s", 2048)]
+    [InlineData("abc", null)]
+    [InlineData("-5", null)]
+    public void parses_typed_speed(string text, int? expected) =>
+        Assert.Equal(expected, DownloadView.ParseSpeedKBps(text));
 }
