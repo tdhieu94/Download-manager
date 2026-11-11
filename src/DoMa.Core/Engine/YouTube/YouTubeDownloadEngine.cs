@@ -214,11 +214,16 @@ public sealed class YouTubeDownloadEngine(YouTubeTools tools) : IDownloadEngine
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        // Đưa proxy qua tham số (không qua biến môi trường) để yt-dlp tự lo phần ffmpeg, vốn không dùng được SOCKS.
+        if (tools.ProxyFor() is { } proxy)
+        {
+            info.ArgumentList.Add("--proxy");
+            info.ArgumentList.Add(proxy);
+        }
         foreach (var a in args)
             info.ArgumentList.Add(a);
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         info.Environment["PYTHONUTF8"] = "1";
-        tools.ApplyProxy(info);
         return Process.Start(info) ?? throw new IOException(L.T("yt-dlp không khởi động được."));
     }
 

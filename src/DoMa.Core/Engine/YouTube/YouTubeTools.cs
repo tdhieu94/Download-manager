@@ -27,17 +27,14 @@ public sealed class YouTubeTools(string folder, HttpClient http)
     /// <summary>Proxy trong cài đặt (trống/null = theo Windows), để các công cụ chạy ngoài cũng đi qua proxy đó.</summary>
     public Func<string?>? Proxy { get; init; }
 
-    /// <summary>Đặt biến môi trường proxy cho một công cụ sắp chạy (yt-dlp, ffmpeg và aria2c đều đọc các biến này).</summary>
+    /// <summary>Địa chỉ proxy để đưa cho công cụ chạy ngoài qua tham số dòng lệnh; null nếu không đặt proxy riêng.</summary>
     /// <param name="httpOnly">Công cụ chỉ dùng được proxy HTTP (aria2c): bỏ qua proxy SOCKS.</param>
-    public void ApplyProxy(System.Diagnostics.ProcessStartInfo info, bool httpOnly = false)
+    public string? ProxyFor(bool httpOnly = false)
     {
-        var proxy = ProxyConfig.Normalize(Proxy?.Invoke());
-        if (proxy.Length == 0 || (httpOnly && !ProxyConfig.IsHttp(proxy)))
-            return;
-        // Giữ cả phần đăng nhập (nếu có) mà Normalize đã bỏ.
-        var full = ProxyConfig.Parse(Proxy?.Invoke())!.AbsoluteUri.TrimEnd('/');
-        foreach (var name in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY" })
-            info.Environment[name] = full;
+        var setting = Proxy?.Invoke();
+        if (ProxyConfig.Parse(setting) is not { } uri || (httpOnly && !ProxyConfig.IsHttp(setting)))
+            return null;
+        return uri.AbsoluteUri.TrimEnd('/');
     }
 
     /// <summary>Đường dẫn chương trình yt-dlp (thay được khi kiểm thử).</summary>

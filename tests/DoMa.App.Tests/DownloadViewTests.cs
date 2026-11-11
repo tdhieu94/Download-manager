@@ -178,4 +178,18 @@ public class DownloadViewTests
         Assert.Equal([c, b, a], DownloadView.Sort(items, SortColumn.Size, false));
         Assert.Equal([a, c, b], DownloadView.Sort(items, SortColumn.Status, true));
     }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("REPORT", true)]
+    [InlineData("github", true)]
+    [InlineData("example.org", true)]
+    [InlineData("nothing", false)]
+    public void search_matches_file_name_or_website(string query, bool expected)
+    {
+        var item = Item(DownloadStatus.Completed, Category.Other);
+        item.TargetPath = Path.Combine("d", "report.pdf");
+        item.Request = item.Request with { Url = "https://objects.githubusercontent.com/x/1", Referrer = "https://example.org/page" };
+        Assert.Equal(expected, DownloadView.MatchesSearch(item, query));
+    }
 }

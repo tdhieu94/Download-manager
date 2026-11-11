@@ -62,7 +62,7 @@ public sealed class MainForm : Form
     private readonly ErrorLog _log;
     private readonly NavList _nav = new();
     private readonly SmoothGrid _grid = new();
-    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = L.T("Tìm theo tên file  (Ctrl+F)") };
+    private readonly InputBox _search = new(IconKind.Search) { PlaceholderText = L.T("Tìm theo tên file hoặc trang web  (Ctrl+F)") };
     private readonly Label _viewTitle = new() { Font = Theme.Title, ForeColor = Theme.Text, AutoSize = true };
     private readonly Label _viewCount = new() { Font = Theme.Small, ForeColor = Theme.TextMuted, AutoSize = true };
     private readonly ModernButton _resume = new(L.T("Tiếp tục"), IconKind.Play);
@@ -1264,7 +1264,7 @@ public sealed class MainForm : Form
         // Mặc định tệp mới thêm gần nhất đứng trên cùng; bấm tiêu đề cột để sắp xếp khác.
         var next = DownloadView.Sort(items, _sortColumn, _sortAscending)
             .Where(i => DownloadView.Matches(current, i))
-            .Where(i => query.Length == 0 || Path.GetFileName(i.TargetPath).Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            .Where(i => DownloadView.MatchesSearch(i, query))
             .ToList();
         if (_view.Select(i => i.Id).SequenceEqual(next.Select(i => i.Id)))
         {

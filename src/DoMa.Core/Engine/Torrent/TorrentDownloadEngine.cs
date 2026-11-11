@@ -46,9 +46,11 @@ public sealed class TorrentDownloadEngine(YouTubeTools tools) : IDownloadEngine
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        // aria2c chỉ dùng được proxy HTTP (cho tệp .torrent và tracker); proxy SOCKS thì để nó nối thẳng.
+        if (tools.ProxyFor(httpOnly: true) is { } proxy)
+            info.ArgumentList.Add("--all-proxy=" + proxy);
         foreach (var a in args)
             info.ArgumentList.Add(a);
-        tools.ApplyProxy(info, httpOnly: true);
         using var process = Process.Start(info) ?? throw new IOException(L.T("aria2c không khởi động được."));
         var tail = new Queue<string>();
         void Keep(string line)

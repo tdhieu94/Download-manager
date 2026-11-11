@@ -125,6 +125,19 @@ public static class DownloadView
         _ => item.Category == Category.Other,
     };
 
+    /// <summary>Ô tìm kiếm: khớp tên tệp hoặc tên trang web (máy chủ) của link tải, không phân biệt hoa thường.</summary>
+    public static bool MatchesSearch(DownloadItem item, string query)
+    {
+        query = query.Trim();
+        if (query.Length == 0)
+            return true;
+        if (Path.GetFileName(item.TargetPath).Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            return true;
+        var link = item.Request.Referrer ?? item.Request.Url;
+        return (Uri.TryCreate(item.Request.Url, UriKind.Absolute, out var url) && url.Host.Contains(query, StringComparison.OrdinalIgnoreCase))
+            || (Uri.TryCreate(link, UriKind.Absolute, out var page) && page.Host.Contains(query, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static int Count(DownloadFilter filter, IEnumerable<DownloadItem> items) =>
         items.Count(i => Matches(filter, i));
 

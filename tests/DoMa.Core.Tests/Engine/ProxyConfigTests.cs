@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using DoMa.Core.Engine;
 using DoMa.Core.Engine.YouTube;
@@ -64,24 +63,19 @@ public class ProxyConfigTests
     }
 
     [Fact]
-    public void tools_get_proxy_through_environment()
+    public void tools_get_the_proxy_they_can_use()
     {
         var setting = "socks5://127.0.0.1:1080";
         var tools = new YouTubeTools(Path.GetTempPath(), new HttpClient()) { Proxy = () => setting };
 
-        var ytdlp = new ProcessStartInfo("x");
-        tools.ApplyProxy(ytdlp);
-        Assert.Equal("socks5://127.0.0.1:1080", ytdlp.Environment["HTTPS_PROXY"]);
-        Assert.Equal("socks5://127.0.0.1:1080", ytdlp.Environment["ALL_PROXY"]);
-
+        Assert.Equal("socks5://127.0.0.1:1080", tools.ProxyFor());
         // aria2c không dùng được SOCKS: để nó nối thẳng thay vì báo lỗi.
-        var aria2 = new ProcessStartInfo("x");
-        aria2.Environment.Remove("ALL_PROXY");
-        tools.ApplyProxy(aria2, httpOnly: true);
-        Assert.False(aria2.Environment.ContainsKey("ALL_PROXY"));
+        Assert.Null(tools.ProxyFor(httpOnly: true));
 
-        setting = "10.0.0.1:3128";
-        tools.ApplyProxy(aria2, httpOnly: true);
-        Assert.Equal("http://10.0.0.1:3128", aria2.Environment["ALL_PROXY"]);
+        setting = "user:pw@10.0.0.1:3128";
+        Assert.Equal("http://user:pw@10.0.0.1:3128", tools.ProxyFor(httpOnly: true));
+
+        setting = "";
+        Assert.Null(tools.ProxyFor());
     }
 }
