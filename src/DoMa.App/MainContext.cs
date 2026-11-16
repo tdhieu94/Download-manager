@@ -86,6 +86,11 @@ internal sealed class MainContext : ApplicationContext
             Notify);
         _coordinator.TryRefresh = TryRefreshLink;
         _coordinator.HandlePlaylist = AddPlaylistAsync;
+        _coordinator.ProbeFailed = (id, failed) =>
+        {
+            if (id == ManualId)
+                _manualFailure = failed;
+        };
 
         foreach (var item in _manager.Items)
             _lastStatus[item.Id] = item.Status;
@@ -713,7 +718,7 @@ internal sealed class MainContext : ApplicationContext
         // Link magnet không nằm trong hộp "Tải nhiều link" (chỉ cho http/https): mở hộp tải riêng cho từng link.
         foreach (var magnet in urls.Where(Core.Engine.Torrent.TorrentLink.IsMagnet))
             await AddLinkAsync(magnet);
-        urls = urls.Where(u => !Core.Engine.Torrent.TorrentLink.IsMagnet(u)).ToList();
+        urls = urls.Where(u => !Core.Engine.Torrent.TorrentLink.IsMagnet(u)).Select(u => GitHubLink.ToFileUrl(u) ?? u).Distinct().ToList();
         if (urls.Count == 0)
             return;
         if (urls.Count == 1)
@@ -729,13 +734,22 @@ internal sealed class MainContext : ApplicationContext
             ? name
             : url;
 
+    private const string ManualId = "manual";
+    private volatile ProbeResult? _manualFailure;
+
     private async Task AddLinkAsync(string url)
     {
-        var msg = new JsonObject { ["type"] = MessageTypes.Capture, ["id"] = "manual", ["url"] = url };
+        // Link trang GitHub (trang xem tệp, trang kho mã) được đổi sang link tải tệp tương ứng.
+        url = GitHubLink.ToFileUrl(url) ?? url;
+        _manualFailure = null;
+        var msg = new JsonObject { ["type"] = MessageTypes.Capture, ["id"] = ManualId, ["url"] = url };
         await CaptureAsync(msg, reply =>
         {
             if (Messages.TypeOf(reply) == MessageTypes.GiveBack)
-                PostToForm(() => MessageBox.Show(_form, L.T("Không tải được link này."), AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning));
+            {
+                var text = _manualFailure is { } failed ? LinkProber.Explain(failed) : L.T("Không tải được link này.");
+                PostToForm(() => MessageBox.Show(_form, text, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning));
+            }
             return Task.FromResult(true);
         }, () => true);
     }

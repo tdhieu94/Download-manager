@@ -36,6 +36,9 @@ public class CaptureCoordinator(
     /// </summary>
     public Func<DownloadRequest, ProbeResult, string, bool>? TryRefresh { get; set; }
 
+    /// <summary>Báo lý do khi link không tải được (mã lượt bắt, kết quả dò link), để nơi gọi giải thích cho người dùng.</summary>
+    public Action<string, ProbeResult>? ProbeFailed { get; set; }
+
     /// <summary>Link playlist/kênh: tự lo việc hỏi và thêm từng video; trả true nếu đã thêm ít nhất một video.</summary>
     public Func<DownloadRequest, Task<bool>>? HandlePlaylist { get; set; }
 
@@ -83,6 +86,7 @@ public class CaptureCoordinator(
         }
         if (!result.Ok)
         {
+            ProbeFailed?.Invoke(capture.Id, result);
             await reply(Messages.Reply(MessageTypes.GiveBack, capture.Id));
             return;
         }

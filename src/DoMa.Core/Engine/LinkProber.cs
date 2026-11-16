@@ -27,6 +27,16 @@ public class LinkProber(HttpClient http)
         }
     }
 
+    /// <summary>Giải thích cho người dùng vì sao một link dán tay không tải được, kèm cách xử lý.</summary>
+    public static string Explain(ProbeResult probe) => probe.Failure switch
+    {
+        ProbeFailure.HtmlInsteadOfFile => L.T("Link này mở ra một trang web chứ không phải một tệp.\n\nHãy bấm chuột phải vào nút hoặc link tải trên trang › “Sao chép địa chỉ liên kết”, rồi dán vào DoMa. Hoặc bấm tải ngay trên trình duyệt để DoMa tự bắt."),
+        ProbeFailure.NotFound => L.T("Không tìm thấy tệp ở link này (lỗi 404).\n\nLink có thể sai hoặc tệp đã bị xoá. Nếu tệp nằm ở nơi cần đăng nhập (ví dụ kho GitHub riêng tư), hãy bấm tải trên trình duyệt đã đăng nhập để DoMa bắt."),
+        ProbeFailure.Expired => L.T("Máy chủ từ chối link này: cần đăng nhập hoặc link đã hết hạn.\n\nHãy bấm tải trên trình duyệt đã đăng nhập để DoMa bắt link kèm thông tin đăng nhập."),
+        ProbeFailure.Network => L.T("Không kết nối được tới máy chủ.\n\nHãy kiểm tra kết nối mạng (và proxy trong Cài đặt nếu bạn có đặt) rồi thử lại."),
+        _ => probe.StatusCode is int code ? L.F("Máy chủ báo lỗi {0} nên không tải được link này.", code) : L.T("Không tải được link này."),
+    };
+
     private static ProbeResult Evaluate(DownloadRequest req, HttpResponseMessage resp)
     {
         var status = (int)resp.StatusCode;
