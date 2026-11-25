@@ -99,6 +99,50 @@ public sealed class SegmentedDownloadEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task expired_redirect_target_is_fetched_again_from_the_original_link()
+    {
+        var issued = 0;
+        var oldHits = 0;
+        await using var server = await RangeServer.StartAsync(o =>
+        {
+            o.Content = RandomContent();
+            o.NextRedirect = () => Interlocked.Increment(ref issued) == 1 ? "/old/f.bin" : "/new/f.bin";
+            // Link tạm đầu tiên chỉ dùng được cho lần dò; các luồng tải sau đó đều bị từ chối như link hết hạn.
+            o.Expired = p => p == "/old/f.bin" && Interlocked.Increment(ref oldHits) > 1;
+        });
+        using var http = HttpClientFactory.Create();
+        var req = new DownloadRequest(server.Url("/redirect").ToString(), null, null, null, null, null, null);
+        var probe = await new LinkProber(http).ProbeAsync(req, CancellationToken.None);
+        Assert.EndsWith("/old/f.bin", probe.FinalUrl);
+        var path = Path.Combine(_dir, "f.bin");
+
+        var result = await Download(new DownloadJob(req, path, StatePath(), 8, probe));
+
+        Assert.Equal(EngineOutcome.Completed, result.Outcome);
+        AssertSameContent(server.Options.Content, path);
+        Assert.Equal(2, Volatile.Read(ref issued));
+    }
+
+    [Fact]
+    public async Task expired_link_without_a_new_target_still_fails()
+    {
+        var hits = 0;
+        await using var server = await RangeServer.StartAsync(o =>
+        {
+            o.Content = RandomContent();
+            o.RedirectLocation = "/same/f.bin";
+            o.Expired = p => Interlocked.Increment(ref hits) > 1;
+        });
+        using var http = HttpClientFactory.Create();
+        var req = new DownloadRequest(server.Url("/redirect").ToString(), null, null, null, null, null, null);
+        var probe = await new LinkProber(http).ProbeAsync(req, CancellationToken.None);
+
+        var result = await Download(new DownloadJob(req, Path.Combine(_dir, "f.bin"), StatePath(), 4, probe));
+
+        Assert.Equal(EngineOutcome.Failed, result.Outcome);
+    }
+
+    [Fact]
     public async Task range_ignored_falls_back_to_single_connection()
     {
         await using var server = await RangeServer.StartAsync(o =>

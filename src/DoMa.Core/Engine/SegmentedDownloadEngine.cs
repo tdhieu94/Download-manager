@@ -8,6 +8,7 @@ namespace DoMa.Core.Engine;
 public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, CancellationToken, Task>? delay = null) : IDownloadEngine
 {
     private const int BufferSize = 64 * 1024;
+    private const int MaxLinkRefreshes = 20;
     private static readonly RetryPolicy Retry = new();
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan SaveInterval = TimeSpan.FromSeconds(2);
@@ -215,7 +216,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         if (position > end)
             return true;
 
-        using var resp = await SendAsync(run.Job, (position, end), ct);
+        using var resp = await SendAsync(run, (position, end), ct);
         if (resp.StatusCode == HttpStatusCode.OK)
             return false;
         if (resp.StatusCode != HttpStatusCode.PartialContent)
@@ -281,7 +282,7 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
     private async Task DownloadSingleAsync(Run run)
     {
         var segment = run.State.Segments[0];
-        using var resp = await SendAsync(run.Job, null, run.PauseToken);
+        using var resp = await SendAsync(run, null, run.PauseToken);
         if (!resp.IsSuccessStatusCode)
             throw new HttpRequestException(null, null, resp.StatusCode);
 
@@ -303,13 +304,34 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         run.StreamEnded = true;
     }
 
-    private async Task<HttpResponseMessage> SendAsync(DownloadJob job, (long From, long To)? range, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(Run run, (long From, long To)? range, CancellationToken ct)
+    {
+        var url = run.Url;
+        var resp = await SendAsync(run.Job, url, range, ct);
+        if (resp.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Gone) || !run.Redirected)
+            return resp;
+        // Link gốc chuyển tới một link tạm có hạn dùng (Hugging Face, GitHub Releases…) và link tạm đã hết hạn:
+        // đi lại từ link gốc để lấy link tạm mới rồi tải tiếp, thay vì báo lỗi bắt người dùng làm mới link.
+        var fresh = await run.RefreshAsync(url, () => ResolveAsync(run.Job, ct), ct);
+        if (fresh is null)
+            return resp;
+        resp.Dispose();
+        return await SendAsync(run.Job, fresh, range, ct);
+    }
+
+    private async Task<string?> ResolveAsync(DownloadJob job, CancellationToken ct)
+    {
+        using var resp = await SendAsync(job, job.Request.Url, (0, 0), ct);
+        return resp.StatusCode is HttpStatusCode.PartialContent or HttpStatusCode.OK ? resp.RequestMessage?.RequestUri?.ToString() : null;
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(DownloadJob job, string url, (long From, long To)? range, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(HeaderTimeout);
         try
         {
-            return await RequestSender.SendAsync(http, job.Request, job.Probe.FinalUrl ?? job.Request.Url, range, timeout.Token);
+            return await RequestSender.SendAsync(http, job.Request, url, range, timeout.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -394,11 +416,46 @@ public class SegmentedDownloadEngine(HttpClient http, Func<TimeSpan, Cancellatio
         private readonly Lock _gate = new();
         private readonly HashSet<Segment> _owned = [];
         private readonly Dictionary<Segment, (int Count, long Downloaded)> _failures = [];
+        private readonly SemaphoreSlim _refresh = new(1, 1);
+        private volatile string _url = job.Probe.FinalUrl ?? job.Request.Url;
+        private int _refreshes;
         private int _workers;
         private int _allowed;
         public int Active;
 
         public DownloadJob Job { get; } = job;
+
+        /// <summary>Link đang tải (link cuối sau chuyển hướng; đổi khi link tạm hết hạn và được cấp lại).</summary>
+        public string Url => _url;
+
+        /// <summary>Link gốc có chuyển hướng tới link khác, nên xin lại được link mới khi link đó hết hạn.</summary>
+        public bool Redirected => !string.Equals(Job.Probe.FinalUrl ?? Job.Request.Url, Job.Request.Url, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Xin link mới thay cho <paramref name="failed"/> (mỗi lúc chỉ một luồng xin; luồng khác dùng luôn link vừa có).
+        /// Null nếu không có link nào khác để thử.
+        /// </summary>
+        public async Task<string?> RefreshAsync(string failed, Func<Task<string?>> resolve, CancellationToken ct)
+        {
+            await _refresh.WaitAsync(ct);
+            try
+            {
+                if (_url != failed)
+                    return _url;
+                if (_refreshes >= MaxLinkRefreshes)
+                    return null;
+                _refreshes++;
+                var fresh = await resolve();
+                if (fresh is null || fresh == failed)
+                    return null;
+                _url = fresh;
+                return fresh;
+            }
+            finally
+            {
+                _refresh.Release();
+            }
+        }
 
         /// <summary>Lỗi cuối là do máy chủ bận/quá tải: tự tải tiếp được sau một lúc.</summary>
         public bool ServerBusy { get; set; }

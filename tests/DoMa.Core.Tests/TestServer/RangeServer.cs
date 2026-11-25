@@ -31,6 +31,10 @@ public class RangeServerOptions
     public Func<int, int?>? StatusForConcurrent { get; set; }
     public int StatusCode { get; set; } = 200;
     public string RedirectLocation { get; set; } = "/final/file.bin";
+    /// <summary>Nếu có: mỗi lần chuyển hướng lấy đích từ đây (giả lập link tạm được cấp mới).</summary>
+    public Func<string>? NextRedirect { get; set; }
+    /// <summary>Nếu trả về true cho đường dẫn này: trả 403 (giả lập link tạm đã hết hạn).</summary>
+    public Func<string, bool>? Expired { get; set; }
 }
 
 public record RecordedRequest(string Path, string Cookie, string Referer);
@@ -121,7 +125,13 @@ public sealed class RangeServer : IAsyncDisposable
         if (path == "/redirect")
         {
             ctx.Response.StatusCode = 302;
-            ctx.Response.Headers.Location = o.RedirectLocation;
+            ctx.Response.Headers.Location = o.NextRedirect?.Invoke() ?? o.RedirectLocation;
+            return;
+        }
+
+        if (o.Expired?.Invoke(path) == true)
+        {
+            ctx.Response.StatusCode = 403;
             return;
         }
 
