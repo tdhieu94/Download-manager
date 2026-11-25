@@ -55,8 +55,6 @@ internal sealed class MainContext : ApplicationContext
         Directory.CreateDirectory(AppPaths.StatesDir);
         _settings = _settingsStore.Load();
         _http = HttpClientFactory.Create(() => _settings.Proxy);
-        // Proxy không chuyển được HTTP/3 (QUIC qua UDP): khi đặt proxy thì chỉ dùng cách tải cũ.
-        Core.Engine.Http3.Disabled = () => !string.IsNullOrWhiteSpace(_settings.Proxy);
         L.Use(_settings.Language);
         _limiter.LimitBytesPerSec = _settings.SpeedLimitKBps * 1024L;
         Theme.Use(Enum.TryParse<ThemeMode>(_settings.Appearance, true, out var mode) ? mode : ThemeMode.System);
